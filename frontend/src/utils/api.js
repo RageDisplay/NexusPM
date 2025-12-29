@@ -6,8 +6,8 @@ const getApiBaseUrl = () => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:8080';
   }
-  // В проде обращаемся к API через относительный путь, который nginx фронтенда проксирует на бэкенд
-  return '/api';
+  // В проде API находится на том же хосте что и фронтенд
+  return `${window.location.protocol}//${window.location.hostname}:8080`;
 };
 
 const api = axios.create({

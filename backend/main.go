@@ -41,11 +41,11 @@ func main() {
 	})
 
 	// Публичные маршруты
-	router.POST("/register", authHandler.Register)
-	router.POST("/login", authHandler.Login)
+	router.POST("/api/register", authHandler.Register)
+	router.POST("/api/login", authHandler.Login)
 
 	// Защищенные маршруты
-	api := router.Group("")
+	api := router.Group("/api")
 	api.Use(middleware.AuthMiddleware())
 	{
 		// Задачи
