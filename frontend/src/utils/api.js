@@ -7,7 +7,9 @@ const getApiBaseUrl = () => {
     return 'http://localhost:8080';
   }
   // В проде API находится на том же хосте что и фронтенд
-  return `${window.location.protocol}//${window.location.hostname}:8080`;
+  // В продакшене используем абсолютные пути в компонентах (например /api/login)
+  // поэтому возвращаем пустой baseURL — запросы начнутся от корня фронтенда
+  return '';
 };
 
 const api = axios.create({
