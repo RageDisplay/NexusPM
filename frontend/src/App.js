@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import TaskManager from './components/TaskManager';
 import UserManagement from './components/UserManagement';
+import ProjectManagement from './components/ProjectManagement';
 import Reports from './components/Reports';
 import Navigation from './components/Navigation';
 import BackupManager from './components/BackupManager';
@@ -15,8 +16,13 @@ function ProtectedRoute({ children, requiredRole }) {
   
   if (loading) return <div>Загрузка...</div>;
   if (!user) return <Navigate to="/login" />;
-  if (requiredRole && user.role !== requiredRole && user.role !== 'admin') {
-    return <Navigate to="/dashboard" />;
+  
+  // Если требуется несколько ролей, передаём массив
+  if (requiredRole) {
+    const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    if (!roles.includes(user.role) && user.role !== 'admin') {
+      return <Navigate to="/dashboard" />;
+    }
   }
   
   return children;
@@ -39,6 +45,11 @@ function App() {
               <Route path="/tasks" element={
                 <ProtectedRoute>
                   <TaskManager />
+                </ProtectedRoute>
+              } />
+              <Route path="/projects" element={
+                <ProtectedRoute requiredRole={['admin', 'manager']}>
+                  <ProjectManagement />
                 </ProtectedRoute>
               } />
               <Route path="/users" element={

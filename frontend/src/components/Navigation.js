@@ -37,11 +37,21 @@ const Navigation = () => {
               </Link>
               {user.role === 'admin' && (
     <>
+              <Link to="/projects" className={location.pathname === '/projects' ? 'active' : ''}>
+                  Проекты
+              </Link>
               <Link to="/users" className={location.pathname === '/users' ? 'active' : ''}>
-                  Настройка пользователей
+                  Пользователи
               </Link>
               <Link to="/backup" className={location.pathname === '/backup' ? 'active' : ''}>
                   Бекап
+              </Link>
+    </>
+          )}
+              {user.role === 'manager' && (
+    <>
+              <Link to="/projects" className={location.pathname === '/projects' ? 'active' : ''}>
+                  Проекты
               </Link>
     </>
           )}

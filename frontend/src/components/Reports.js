@@ -21,10 +21,10 @@ const Reports = () => {
           filename = 'my_tasks.xlsx';
           break;
         case 'department-tasks':
-          filename = 'department_tasks.xlsx';
+          filename = 'department_statistics.xlsx';
           break;
         case 'all-tasks':
-          filename = 'all_tasks.xlsx';
+          filename = 'statistics_by_projects.xlsx';
           break;
         default:
           filename = 'report.xlsx';
@@ -58,7 +58,7 @@ const Reports = () => {
             className="btn btn-secondary"
             onClick={() => downloadReport('department-tasks')}
           >
-            Скачать задачи всего отдела
+            Скачать статистику отдела
           </button>
         )}
 
@@ -67,7 +67,7 @@ const Reports = () => {
             className="btn btn-secondary"
             onClick={() => downloadReport('all-tasks')}
           >
-            Скачать все задачи из системы
+            Скачать статистику по проектам
           </button>
         )}
       </div>

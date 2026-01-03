@@ -35,6 +35,30 @@ func InitDB() (*sql.DB, error) {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );`
 
+	// Создание таблицы проектов
+	createProjectsTable := `
+    CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        description TEXT,
+        created_by INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (created_by) REFERENCES users (id)
+    );`
+
+	// Таблица связи пользователей и проектов
+	createUserProjectsTable := `
+    CREATE TABLE IF NOT EXISTS user_projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        project_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, project_id),
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        FOREIGN KEY (project_id) REFERENCES projects (id)
+    );`
+
 	// Создание таблицы задач
 	createTasksTable := `
     CREATE TABLE IF NOT EXISTS tasks (
@@ -44,13 +68,18 @@ func InitDB() (*sql.DB, error) {
         progress INTEGER DEFAULT 0,
         hours_per_week DECIMAL(10,2) DEFAULT 0,
         load_per_month INTEGER DEFAULT 0,
+        weekly_info TEXT,
+        planning TEXT,
+        help_needed TEXT,
         user_id INTEGER NOT NULL,
+        project_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id)
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        FOREIGN KEY (project_id) REFERENCES projects (id)
     );`
 
-	tables := []string{createUsersTable, createTasksTable}
+	tables := []string{createUsersTable, createProjectsTable, createUserProjectsTable, createTasksTable}
 	for _, table := range tables {
 		_, err = db.Exec(table)
 		if err != nil {

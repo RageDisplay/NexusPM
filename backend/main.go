@@ -22,6 +22,7 @@ func main() {
 	taskHandler := handlers.NewTaskHandler(db)
 	userHandler := handlers.NewUserHandler(db)
 	reportHandler := handlers.NewReportHandler(db)
+	projectHandler := handlers.NewProjectHandler(db)
 
 	router := gin.Default()
 
@@ -54,8 +55,19 @@ func main() {
 		api.PUT("/tasks/:id", taskHandler.UpdateTask)
 		api.DELETE("/tasks/:id", taskHandler.DeleteTask)
 
+		// Проекты
+		api.GET("/projects", projectHandler.GetProjects)
+		api.GET("/projects/user", projectHandler.GetUserProjects)
+		api.GET("/projects/:id", projectHandler.GetProjectByID)
+		api.POST("/projects", middleware.ManagerOrAdmin(), projectHandler.CreateProject)
+		api.PUT("/projects/:id", middleware.ManagerOrAdmin(), projectHandler.UpdateProject)
+		api.DELETE("/projects/:id", middleware.ManagerOrAdmin(), projectHandler.DeleteProject)
+		api.POST("/projects/assign", middleware.ManagerOrAdmin(), projectHandler.AssignProjectToUser)
+		api.POST("/projects/remove", middleware.ManagerOrAdmin(), projectHandler.RemoveProjectFromUser)
+		api.GET("/projects/:id/users", middleware.ManagerOrAdmin(), projectHandler.GetProjectUsers)
+
 		// Пользователи (только для админов)
-		api.GET("/users", middleware.AdminOnly(), userHandler.GetUsers)
+		api.GET("/users", userHandler.GetUsers)
 		api.PUT("/users/:id/role", middleware.AdminOnly(), userHandler.UpdateUserRole)
 		api.PUT("/users/:id/department", middleware.AdminOnly(), userHandler.UpdateUserDepartment)
 		api.DELETE("/users/:id", middleware.AdminOnly(), userHandler.DeleteUser)
