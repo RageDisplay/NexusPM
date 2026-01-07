@@ -35,7 +35,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Проверяем, это ошибка 401 при доступе к защищённому ресурсу (не логин/регистр)
+    const isAuthEndpoint = error.config?.url?.includes('/api/login') || 
+                           error.config?.url?.includes('/api/register');
+    
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

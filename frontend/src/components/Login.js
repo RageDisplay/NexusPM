@@ -12,6 +12,7 @@ const Login = () => {
   });
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -28,7 +29,23 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Валидация полей
+    if (!formData.username.trim()) {
+      setError('Пожалуйста, введите имя пользователя');
+      return;
+    }
+    if (!formData.password.trim()) {
+      setError('Пожалуйста, введите пароль');
+      return;
+    }
+    if (!isLogin && !formData.department) {
+      setError('Пожалуйста, выберите отдел');
+      return;
+    }
+
     setError('');
+    setIsLoading(true);
 
     try {
       const endpoint = isLogin ? '/api/login' : '/api/register';
@@ -39,17 +56,14 @@ const Login = () => {
         navigate('/dashboard');
       }
     } catch (error) {
-      setError(error.response?.data?.error || 'Something went wrong');
+      setError(error.response?.data?.error || 'Произошла ошибка при запросе к серверу');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      username: '',
-      password: '',
-      department: ''
-    });
-    setError('');
+  const handleInputChange = (e, field) => {
+    setFormData({...formData, [field]: e.target.value});
   };
 
   const togglePasswordVisibility = () => {
@@ -65,7 +79,8 @@ const Login = () => {
           <input
             type="text"
             value={formData.username}
-            onChange={(e) => setFormData({...formData, username: e.target.value})}
+            onChange={(e) => handleInputChange(e, 'username')}
+            disabled={isLoading}
             required
           />
         </div>
@@ -75,13 +90,15 @@ const Login = () => {
             <input
               type={showPassword ? "text" : "password"}
               value={formData.password}
-              onChange={(e) => setFormData({...formData, password: e.target.value})}
+              onChange={(e) => handleInputChange(e, 'password')}
+              disabled={isLoading}
               required
             />
             <button
               type="button"
               className="password-toggle"
               onClick={togglePasswordVisibility}
+              disabled={isLoading}
             >
               {showPassword ? '👁' : '👁'}
             </button>
@@ -94,7 +111,8 @@ const Login = () => {
             <label>Отдел</label>
             <select
               value={formData.department}
-              onChange={(e) => setFormData({...formData, department: e.target.value})}
+              onChange={(e) => handleInputChange(e, 'department')}
+              disabled={isLoading}
               required={!isLogin}
             >
               {departments.map(dept => (
@@ -113,9 +131,23 @@ const Login = () => {
           </div>
         )}
         
-        {error && <div className="error">{error}</div>}
-        <button type="submit" className="btn btn-primary">
-          {isLogin ? 'Авторизация' : 'Регистрация'}
+        {error && (
+          <div className="error">
+            <div className="error-content">
+              <span>{error}</span>
+              <button 
+                type="button"
+                className="error-close"
+                onClick={() => setError('')}
+                title="Закрыть"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+        <button type="submit" className="btn btn-primary" disabled={isLoading}>
+          {isLoading ? 'Пожалуйста, ожидайте...' : (isLogin ? 'Авторизация' : 'Регистрация')}
         </button>
       </form>
       <p>
@@ -125,8 +157,14 @@ const Login = () => {
           className="btn-link"
           onClick={() => {
             setIsLogin(!isLogin);
-            resetForm();
+            setFormData({
+              username: '',
+              password: '',
+              department: ''
+            });
+            setError('');
           }}
+          disabled={isLoading}
         >
           {isLogin ? 'Регистрация' : 'Авторизация'}
         </button>
