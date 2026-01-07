@@ -177,7 +177,7 @@ func (h *ADConfigHandler) SyncADUsers(c *gin.Context) {
 // testLDAPConnection тестирует подключение к LDAP серверу
 func (h *ADConfigHandler) testLDAPConnection(serverURL, bindDN, bindPassword string) error {
 	// Используем методы ldapManager для проверки подключения
-	// Просто создаём временную конфигурацию и пытаемся подключиться
+	// Создаём временную конфигурацию и пытаемся подключиться
 	tempConfig := &models.ADConfig{
 		ServerURL:    serverURL,
 		BindDN:       bindDN,
@@ -185,7 +185,7 @@ func (h *ADConfigHandler) testLDAPConnection(serverURL, bindDN, bindPassword str
 	}
 
 	// Попытка подключения будет произведена в AuthenticateADUser
-	// Для тестирования просто проверяем, что параметры не пусты
+	// Для тестирования проверяем, что параметры не пусты
 	if tempConfig.ServerURL == "" || tempConfig.BindDN == "" {
 		return fmt.Errorf("invalid parameters: server_url and bind_dn are required")
 	}
