@@ -25,7 +25,9 @@ const Navigation = () => {
         <div className="nav-links">
           {user ? (
             <>
-              <span className="nav-user">Привет, {user.username} ({user.role})</span>
+              <span className="nav-user">
+                Привет, {user.username} ({user.role}){user.department && ` - ${user.department}`}
+              </span>
               <Link to="/dashboard" className={location.pathname === '/dashboard' ? 'active' : ''}>
                 Дешборд
               </Link>
@@ -42,6 +44,9 @@ const Navigation = () => {
               </Link>
               <Link to="/users" className={location.pathname === '/users' ? 'active' : ''}>
                   Пользователи
+              </Link>
+              <Link to="/ad-config" className={location.pathname === '/ad-config' ? 'active' : ''}>
+                  AD Конфиг
               </Link>
               <Link to="/backup" className={location.pathname === '/backup' ? 'active' : ''}>
                   Бекап

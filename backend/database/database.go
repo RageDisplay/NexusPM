@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -29,10 +30,33 @@ func InitDB() (*sql.DB, error) {
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username VARCHAR(50) UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
+        password_hash TEXT,
         role VARCHAR(20) NOT NULL DEFAULT 'user',
         department VARCHAR(100),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        is_ad_user BOOLEAN DEFAULT 0,
+        ad_user_id VARCHAR(255),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );`
+
+	// Таблица конфигурации AD
+	createADConfigTable := `
+    CREATE TABLE IF NOT EXISTS ad_config (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enabled BOOLEAN DEFAULT 0,
+        directory_type VARCHAR(50) NOT NULL,
+        server_url VARCHAR(255) NOT NULL,
+        base_dn VARCHAR(255) NOT NULL,
+        bind_dn VARCHAR(255) NOT NULL,
+        bind_password TEXT NOT NULL,
+        user_search_base VARCHAR(255) NOT NULL,
+        user_name_attr VARCHAR(100) NOT NULL,
+        department_attr VARCHAR(100),
+        email_attr VARCHAR(100),
+        group_search_base VARCHAR(255),
+        sync_interval INTEGER DEFAULT 60,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );`
 
 	// Создание таблицы проектов
@@ -79,7 +103,7 @@ func InitDB() (*sql.DB, error) {
         FOREIGN KEY (project_id) REFERENCES projects (id)
     );`
 
-	tables := []string{createUsersTable, createProjectsTable, createUserProjectsTable, createTasksTable}
+	tables := []string{createUsersTable, createProjectsTable, createUserProjectsTable, createTasksTable, createADConfigTable}
 	for _, table := range tables {
 		_, err = db.Exec(table)
 		if err != nil {
@@ -89,7 +113,7 @@ func InitDB() (*sql.DB, error) {
 
 	// Создание администратора по умолчанию
 	hashedPassword, _ := HashPassword("main12!@")
-	db.Exec(`INSERT OR IGNORE INTO users (username, password_hash, role, department) VALUES (?, ?, ?, ?)`, "admin", hashedPassword, "admin", "Администрация")
+	db.Exec(`INSERT OR IGNORE INTO users (username, password_hash, role, department, is_ad_user, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "admin", hashedPassword, "admin", "Администрация", false, time.Now(), time.Now())
 
 	log.Println("Database initialized successfully")
 	return db, nil

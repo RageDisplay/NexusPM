@@ -9,6 +9,7 @@ import ProjectManagement from './components/ProjectManagement';
 import Reports from './components/Reports';
 import Navigation from './components/Navigation';
 import BackupManager from './components/BackupManager';
+import ADConfigPanel from './components/ADConfigPanel';
 import './App.css';
 
 function ProtectedRoute({ children, requiredRole }) {
@@ -65,6 +66,11 @@ function App() {
               <Route path="/backup" element={
                 <ProtectedRoute requiredRole="admin">
                   <BackupManager />
+                </ProtectedRoute>
+              } />
+              <Route path="/ad-config" element={
+                <ProtectedRoute requiredRole="admin">
+                  <ADConfigPanel />
                 </ProtectedRoute>
               } />
               <Route path="/" element={<Navigate to="/dashboard" />} />

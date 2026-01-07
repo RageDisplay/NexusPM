@@ -23,6 +23,7 @@ func main() {
 	userHandler := handlers.NewUserHandler(db)
 	reportHandler := handlers.NewReportHandler(db)
 	projectHandler := handlers.NewProjectHandler(db)
+	adConfigHandler := handlers.NewADConfigHandler(db)
 
 	router := gin.Default()
 
@@ -44,11 +45,18 @@ func main() {
 	// Публичные маршруты
 	router.POST("/api/register", authHandler.Register)
 	router.POST("/api/login", authHandler.Login)
+	router.POST("/api/auth/set-department", authHandler.SetDepartmentOnFirstLogin)
+	router.GET("/api/ad-config/status", adConfigHandler.GetADConfigStatus)
+	router.GET("/api/auth/departments", authHandler.GetDepartments)
 
 	// Защищенные маршруты
 	api := router.Group("/api")
 	api.Use(middleware.AuthMiddleware())
 	{
+		// Авторизация
+		api.GET("/auth/profile", authHandler.GetProfile)
+		api.PUT("/auth/department", authHandler.UpdateDepartment)
+
 		// Задачи
 		api.GET("/tasks", taskHandler.GetTasks)
 		api.POST("/tasks", taskHandler.CreateTask)
@@ -80,6 +88,12 @@ func main() {
 		// Бэкап БД
 		api.GET("/backup", middleware.AdminOnly(), handlers.BackupDB)
 		api.POST("/restore", middleware.AdminOnly(), handlers.RestoreDB)
+
+		// AD конфигурация (только для админов)
+		api.GET("/ad-config", middleware.AdminOnly(), adConfigHandler.GetADConfig)
+		api.POST("/ad-config", middleware.AdminOnly(), adConfigHandler.SetupADConfig)
+		api.POST("/ad-config/test", middleware.AdminOnly(), adConfigHandler.TestADConnection)
+		api.POST("/ad-config/sync", middleware.AdminOnly(), adConfigHandler.SyncADUsers)
 	}
 
 	log.Println("Server starting on :8080")

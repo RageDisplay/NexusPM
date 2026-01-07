@@ -12,6 +12,26 @@ type User struct {
 	Role         string         `json:"role"`
 	Department   sql.NullString `json:"department"`
 	CreatedAt    time.Time      `json:"created_at"`
+	ADUserID     sql.NullString `json:"ad_user_id"` // ID пользователя в AD
+	IsADUser     bool           `json:"is_ad_user"` // Флаг, что это пользователь из AD
+}
+
+type ADConfig struct {
+	ID              int       `json:"id"`
+	Enabled         bool      `json:"enabled"`
+	DirectoryType   string    `json:"directory_type"`    // "active_directory" или "freeipa"
+	ServerURL       string    `json:"server_url"`        // LDAP server URL
+	BaseDN          string    `json:"base_dn"`           // Base DN
+	BindDN          string    `json:"bind_dn"`           // Bind DN for service account
+	BindPassword    string    `json:"bind_password"`     // Bind password
+	UserSearchBase  string    `json:"user_search_base"`  // OU для поиска пользователей
+	UserNameAttr    string    `json:"user_name_attr"`    // Атрибут для имени (sAMAccountName или uid)
+	DepartmentAttr  string    `json:"department_attr"`   // Атрибут для отдела (department)
+	EmailAttr       string    `json:"email_attr"`        // Атрибут для email
+	GroupSearchBase string    `json:"group_search_base"` // OU для поиска групп
+	SyncInterval    int       `json:"sync_interval"`     // Интервал синхронизации в минутах
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Project struct {

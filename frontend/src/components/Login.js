@@ -5,6 +5,14 @@ import api from '../utils/api';
 
 const Login = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [authType, setAuthType] = useState('auto'); // 'auto', 'local', 'ad'
+  const [adEnabled, setAdEnabled] = useState(false);
+  const [showDepartmentModal, setShowDepartmentModal] = useState(false);
+  const [departmentModalData, setDepartmentModalData] = useState({
+    token: null,
+    user: null,
+    selectedDepartment: ''
+  });
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -17,15 +25,88 @@ const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // Список доступных отделов
-  const departments = [
-    { value: '', label: 'Выбор отдела', disabled: true },
-    { value: 'ОП', label: 'ОП' },
-    { value: 'ОВ', label: 'ОВ' },
-    { value: 'РП', label: 'РП' },
-    { value: 'ГИП', label: 'ГИП' },
-    { value: 'ПС', label: 'ПС' }
-  ];
+  const [departments, setDepartments] = React.useState([
+    { value: '', label: 'Выбор отдела', disabled: true }
+  ]);
+
+  // Проверяем доступность AD при загрузке и загружаем отделы
+  React.useEffect(() => {
+    checkADAvailable();
+    fetchDepartments();
+  }, []);
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await api.get('/api/auth/departments');
+      if (response.data.departments) {
+        setDepartments(response.data.departments);
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+      // Используем дефолтный список если ошибка
+      setDepartments([
+        { value: '', label: 'Выбор отдела', disabled: true },
+        { value: 'ОП', label: 'ОП' },
+        { value: 'ОВ', label: 'ОВ' },
+        { value: 'РП', label: 'РП' },
+        { value: 'ГИП', label: 'ГИП' },
+        { value: 'ПС', label: 'ПС' }
+      ]);
+    }
+  };
+
+  const checkADAvailable = async () => {
+    try {
+      const response = await api.get('/api/ad-config/status');
+      if (response.data.enabled) {
+        setAdEnabled(true);
+      }
+    } catch (error) {
+      // AD не настроена
+      setAdEnabled(false);
+    }
+  };
+
+  const handleDepartmentModalSubmit = async () => {
+    if (!departmentModalData.selectedDepartment) {
+      setError('Пожалуйста, выберите отдел');
+      return;
+    }
+
+    setError('');
+    setIsLoading(true);
+
+    try {
+      console.log('Submitting department:', departmentModalData.selectedDepartment);
+      console.log('Using token:', departmentModalData.token);
+      
+      // Обновляем отдел на сервере используя публичный эндпоинт (не требует авторизации)
+      const response = await api.post('/api/auth/set-department', {
+        token: departmentModalData.token,
+        department: departmentModalData.selectedDepartment
+      });
+      
+      console.log('Department update response:', response.data);
+
+      // Используем обновленные данные и новый токен из ответа сервера
+      const updatedUser = response.data.user || {
+        ...departmentModalData.user,
+        department: departmentModalData.selectedDepartment
+      };
+      
+      const newToken = response.data.token || departmentModalData.token;
+
+      console.log('Logging in with updated user:', updatedUser);
+      login(updatedUser, newToken);
+      setShowDepartmentModal(false);
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error updating department:', error);
+      setError(error.response?.data?.error || 'Ошибка при обновлении отдела');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,11 +130,35 @@ const Login = () => {
 
     try {
       const endpoint = isLogin ? '/api/login' : '/api/register';
-      const response = await api.post(endpoint, formData);
+      const payload = { ...formData };
+      
+      // Если это логин, добавляем тип аутентификации
+      if (isLogin) {
+        payload.auth_type = authType;
+      }
+
+      const response = await api.post(endpoint, payload);
       
       if (response.data.token) {
-        login(response.data.user, response.data.token);
-        navigate('/dashboard');
+        // Если это пользователь из AD без отдела, показываем модальное окно
+        const isADUserWithoutDepartment = isLogin && 
+          response.data.user.is_ad_user && 
+          (!response.data.user.department || response.data.user.department === '');
+        
+        console.log('Login response user:', response.data.user);
+        console.log('Is AD user without department:', isADUserWithoutDepartment);
+        
+        if (isADUserWithoutDepartment) {
+          setDepartmentModalData({
+            token: response.data.token,
+            user: response.data.user,
+            selectedDepartment: ''
+          });
+          setShowDepartmentModal(true);
+        } else {
+          login(response.data.user, response.data.token);
+          navigate('/dashboard');
+        }
       }
     } catch (error) {
       setError(error.response?.data?.error || 'Произошла ошибка при запросе к серверу');
@@ -73,6 +178,48 @@ const Login = () => {
   return (
     <div className="login-container">
       <h2>{isLogin ? 'Авторизация' : 'Регистрация'}</h2>
+      
+      {/* Выбор типа аутентификации для логина */}
+      {isLogin && adEnabled && (
+        <div className="auth-type-selector">
+          <div className="auth-type-options">
+            <label className="radio-label">
+              <input
+                type="radio"
+                name="authType"
+                value="auto"
+                checked={authType === 'auto'}
+                onChange={(e) => setAuthType(e.target.value)}
+                disabled={isLoading}
+              />
+              <span>Автоматический выбор</span>
+            </label>
+            <label className="radio-label">
+              <input
+                type="radio"
+                name="authType"
+                value="ad"
+                checked={authType === 'ad'}
+                onChange={(e) => setAuthType(e.target.value)}
+                disabled={isLoading}
+              />
+              <span>Вход через домен AD/FreeIPA</span>
+            </label>
+            <label className="radio-label">
+              <input
+                type="radio"
+                name="authType"
+                value="local"
+                checked={authType === 'local'}
+                onChange={(e) => setAuthType(e.target.value)}
+                disabled={isLoading}
+              />
+              <span>Локальный вход</span>
+            </label>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="login-form">
         <div className="form-group">
           <label>Имя пользователя</label>
@@ -169,6 +316,64 @@ const Login = () => {
           {isLogin ? 'Регистрация' : 'Авторизация'}
         </button>
       </p>
+
+      {/* Модальное окно для выбора отдела при первом входе пользователя из AD */}
+      {showDepartmentModal && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <div className="modal-header">
+              <h3>Выберите ваш отдел</h3>
+            </div>
+            <div className="modal-body">
+              <p>Ваш аккаунт был импортирован из системы домена. Пожалуйста, выберите свой отдел:</p>
+              <div className="form-group">
+                <select
+                  value={departmentModalData.selectedDepartment}
+                  onChange={(e) => setDepartmentModalData({
+                    ...departmentModalData,
+                    selectedDepartment: e.target.value
+                  })}
+                  disabled={isLoading}
+                >
+                  {departments.map(dept => (
+                    <option 
+                      key={dept.value} 
+                      value={dept.value} 
+                      disabled={dept.disabled}
+                    >
+                      {dept.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {error && (
+                <div className="error">
+                  <div className="error-content">
+                    <span>{error}</span>
+                    <button 
+                      type="button"
+                      className="error-close"
+                      onClick={() => setError('')}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleDepartmentModalSubmit}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Сохранение...' : 'Продолжить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
