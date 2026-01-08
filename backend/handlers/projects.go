@@ -17,7 +17,7 @@ func NewProjectHandler(db *sql.DB) *ProjectHandler {
 	return &ProjectHandler{db: db}
 }
 
-// GetProjects получить все проекты (только для админа/менеджера)
+// GetProjects получить все проекты (для админа и менеджера видны все проекты)
 func (h *ProjectHandler) GetProjects(c *gin.Context) {
 	userRole := c.GetString("userRole")
 
@@ -27,7 +27,7 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 	}
 
 	rows, err := h.db.Query(`
-        SELECT id, name, description, created_by, created_at, updated_at
+        SELECT id, name, description, created_by, department, created_at, updated_at
         FROM projects
         ORDER BY name
     `)
@@ -40,7 +40,7 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 	projects := []models.Project{}
 	for rows.Next() {
 		var project models.Project
-		err := rows.Scan(&project.ID, &project.Name, &project.Description, &project.CreatedBy, &project.CreatedAt, &project.UpdatedAt)
+		err := rows.Scan(&project.ID, &project.Name, &project.Description, &project.CreatedBy, &project.Department, &project.CreatedAt, &project.UpdatedAt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -56,7 +56,7 @@ func (h *ProjectHandler) GetUserProjects(c *gin.Context) {
 	userID := c.GetInt("userID")
 
 	rows, err := h.db.Query(`
-        SELECT DISTINCT p.id, p.name, p.description, p.created_by, p.created_at, p.updated_at
+        SELECT DISTINCT p.id, p.name, p.description, p.created_by, p.department, p.created_at, p.updated_at
         FROM projects p
         LEFT JOIN user_projects up ON p.id = up.project_id
         WHERE up.user_id = ? OR p.created_by = ?
@@ -71,7 +71,7 @@ func (h *ProjectHandler) GetUserProjects(c *gin.Context) {
 	projects := []models.Project{}
 	for rows.Next() {
 		var project models.Project
-		err := rows.Scan(&project.ID, &project.Name, &project.Description, &project.CreatedBy, &project.CreatedAt, &project.UpdatedAt)
+		err := rows.Scan(&project.ID, &project.Name, &project.Description, &project.CreatedBy, &project.Department, &project.CreatedAt, &project.UpdatedAt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -86,6 +86,7 @@ func (h *ProjectHandler) GetUserProjects(c *gin.Context) {
 func (h *ProjectHandler) CreateProject(c *gin.Context) {
 	userRole := c.GetString("userRole")
 	userID := c.GetInt("userID")
+	userDepartment := c.GetString("userDepartment")
 
 	if userRole != "admin" && userRole != "manager" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Недостаточно прав для создания проектов"})
@@ -98,10 +99,20 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 		return
 	}
 
+	// Для менеджера department устанавливается автоматически (его отдел)
+	// Для админа можно указать в request
+	if userRole == "manager" {
+		project.Department = userDepartment
+	} else if project.Department == "" {
+		// Админ должен указать отдел
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Пожалуйста укажите отдел для проекта"})
+		return
+	}
+
 	result, err := h.db.Exec(`
-        INSERT INTO projects (name, description, created_by)
-        VALUES (?, ?, ?)
-    `, project.Name, project.Description, userID)
+        INSERT INTO projects (name, description, created_by, department)
+        VALUES (?, ?, ?, ?)
+    `, project.Name, project.Description, userID, project.Department)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -156,9 +167,10 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 }
 
 // AssignProjectToUser назначить проект пользователю (для админа и менеджера)
+// Менеджер может назначать только сотрудников своего отдела на проекты любых отделов
+// Админ может назначать кого угодно на любой проект
 func (h *ProjectHandler) AssignProjectToUser(c *gin.Context) {
 	userRole := c.GetString("userRole")
-	userID := c.GetInt("userID")
 	userDepartment := c.GetString("userDepartment")
 
 	if userRole != "admin" && userRole != "manager" {
@@ -178,21 +190,11 @@ func (h *ProjectHandler) AssignProjectToUser(c *gin.Context) {
 
 	// Проверяем права менеджера и админа
 	if userRole == "manager" {
-		// Менеджер может назначать только в своём отделе или самого себя
-		if req.UserID != userID {
-			// Если это не сам менеджер, проверяем, что целевой пользователь в его отделе
-			var targetUserDept sql.NullString
-			err := h.db.QueryRow("SELECT department FROM users WHERE id = ?", req.UserID).Scan(&targetUserDept)
-			if err != nil || !targetUserDept.Valid || targetUserDept.String != userDepartment {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете назначать проекты только сотрудникам своего отдела"})
-				return
-			}
-		}
-		// Проверяем, что проект создан менеджером
-		var createdBy int
-		err := h.db.QueryRow("SELECT created_by FROM projects WHERE id = ?", req.ProjectID).Scan(&createdBy)
-		if err != nil || createdBy != userID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете назначать только свои проекты"})
+		// Менеджер может назначать только своих сотрудников, но на проекты любых отделов
+		var targetUserDept sql.NullString
+		err := h.db.QueryRow("SELECT department FROM users WHERE id = ?", req.UserID).Scan(&targetUserDept)
+		if err != nil || !targetUserDept.Valid || targetUserDept.String != userDepartment {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете назначать проекты только сотрудникам своего отдела"})
 			return
 		}
 	}
@@ -212,9 +214,10 @@ func (h *ProjectHandler) AssignProjectToUser(c *gin.Context) {
 }
 
 // RemoveProjectFromUser удалить проект у пользователя (для админа и менеджера)
+// Менеджер может удалять только своих сотрудников со всех проектов
+// Админ может удалять кого угодно со всех проектов
 func (h *ProjectHandler) RemoveProjectFromUser(c *gin.Context) {
 	userRole := c.GetString("userRole")
-	userID := c.GetInt("userID")
 	userDepartment := c.GetString("userDepartment")
 
 	if userRole != "admin" && userRole != "manager" {
@@ -234,23 +237,14 @@ func (h *ProjectHandler) RemoveProjectFromUser(c *gin.Context) {
 
 	// Проверяем права менеджера и админа
 	if userRole == "manager" {
-		// Менеджер может удалять только у себя и сотрудников своего отдела
-		if req.UserID != userID {
-			// Если это не сам менеджер, проверяем, что целевой пользователь в его отделе
-			var targetUserDept sql.NullString
-			err := h.db.QueryRow("SELECT department FROM users WHERE id = ?", req.UserID).Scan(&targetUserDept)
-			if err != nil || !targetUserDept.Valid || targetUserDept.String != userDepartment {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять проекты только у сотрудников своего отдела"})
-				return
-			}
-		}
-		// Проверяем, что проект создан менеджером
-		var createdBy int
-		err := h.db.QueryRow("SELECT created_by FROM projects WHERE id = ?", req.ProjectID).Scan(&createdBy)
-		if err != nil || createdBy != userID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять только свои проекты"})
+		// Менеджер может удалять только у сотрудников своего отдела
+		var targetUserDept sql.NullString
+		err := h.db.QueryRow("SELECT department FROM users WHERE id = ?", req.UserID).Scan(&targetUserDept)
+		if err != nil || !targetUserDept.Valid || targetUserDept.String != userDepartment {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять проекты только у сотрудников своего отдела"})
 			return
 		}
+
 	}
 	// Админ может удалять кого угодно со любого проекта (без дополнительных проверок)
 
@@ -273,10 +267,10 @@ func (h *ProjectHandler) GetProjectByID(c *gin.Context) {
 
 	var project models.Project
 	err := h.db.QueryRow(`
-        SELECT id, name, description, created_by, created_at, updated_at
+        SELECT id, name, description, created_by, department, created_at, updated_at
         FROM projects
         WHERE id = ?
-    `, projectID).Scan(&project.ID, &project.Name, &project.Description, &project.CreatedBy, &project.CreatedAt, &project.UpdatedAt)
+    `, projectID).Scan(&project.ID, &project.Name, &project.Description, &project.CreatedBy, &project.Department, &project.CreatedAt, &project.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Проект не найден"})
@@ -292,9 +286,9 @@ func (h *ProjectHandler) GetProjectByID(c *gin.Context) {
 }
 
 // GetProjectUsers получить пользователей проекта (для админа и менеджера)
+// Менеджер может видеть пользователей всех проектов, но управлять только своих
 func (h *ProjectHandler) GetProjectUsers(c *gin.Context) {
 	userRole := c.GetString("userRole")
-	userID := c.GetInt("userID")
 	projectID, _ := strconv.Atoi(c.Param("id"))
 
 	if userRole != "admin" && userRole != "manager" {
@@ -302,14 +296,13 @@ func (h *ProjectHandler) GetProjectUsers(c *gin.Context) {
 		return
 	}
 
-	// Проверяем, что менеджер видит только свои проекты
-	if userRole == "manager" {
-		var createdBy int
-		err := h.db.QueryRow("SELECT created_by FROM projects WHERE id = ?", projectID).Scan(&createdBy)
-		if err != nil || createdBy != userID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете видеть только свои проекты"})
-			return
-		}
+	// Менеджер может видеть пользователей всех проектов (но управлять может только своими)
+	// Но для доступности можем проверить что проект существует
+	var projectExists int
+	err := h.db.QueryRow("SELECT COUNT(*) FROM projects WHERE id = ?", projectID).Scan(&projectExists)
+	if err != nil || projectExists == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Проект не найден"})
+		return
 	}
 
 	rows, err := h.db.Query(`
@@ -353,7 +346,6 @@ func (h *ProjectHandler) GetProjectUsers(c *gin.Context) {
 // DeleteProject удалить проект (для админа и менеджера, создавшего проект)
 func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	userRole := c.GetString("userRole")
-	userID := c.GetInt("userID")
 	projectID, _ := strconv.Atoi(c.Param("id"))
 
 	if userRole != "admin" && userRole != "manager" {
@@ -376,6 +368,8 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	// Проверяем права менеджера
 	if userRole == "manager" {
 		// Менеджер может удалить проект только если он его создал
+		// Получаем текущего пользователя из контекста
+		userID := c.GetInt("userID")
 		if createdBy != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять только свои проекты"})
 			return

@@ -949,6 +949,13 @@ button:disabled {
   white-space: nowrap;
 }
 
+.project-item-dept {
+  font-size: 0.8rem;
+  color: #95a5a6;
+  margin-top: 4px;
+  font-style: italic;
+}
+
 .project-details {
   background: white;
   border: 1px solid #e9ecef;

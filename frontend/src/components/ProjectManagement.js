@@ -23,9 +23,8 @@ const ProjectManagement = () => {
     const fetchProjects = async () => {
         try {
             setLoading(true);
-            // Менеджер видит только проекты своего отдела, админ - все
-            const endpoint = user?.role === 'manager' ? '/api/projects/user' : '/api/projects';
-            const response = await api.get(endpoint);
+            // Все пользователи (админ и менеджер) видят все проекты
+            const response = await api.get('/api/projects');
             const projectList = response.data || [];
             setProjects(projectList);
         } catch (error) {
@@ -41,7 +40,7 @@ const ProjectManagement = () => {
             if (response.data) {
                 let userList = response.data.filter(u => u.role === 'user');
                 
-                // Для менеджера - только пользователи его отдела
+                // Для менеджера - только пользователи его отдела (для назначения)
                 if (user?.role === 'manager') {
                     userList = userList.filter(u => u.department === user?.department);
                 }
@@ -200,6 +199,7 @@ const ProjectManagement = () => {
                             >
                                 <div className="project-item-name">{project.name}</div>
                                 <div className="project-item-desc">{project.description}</div>
+                                <div className="project-item-dept">Отдел: {project.department}</div>
                             </div>
                         ))
                     )}
@@ -219,6 +219,11 @@ const ProjectManagement = () => {
                             <div className="project-detail-item">
                                 <label>Описание:</label>
                                 <div className="project-detail-value">{selectedProject.description}</div>
+                            </div>
+
+                            <div className="project-detail-item">
+                                <label>Отдел:</label>
+                                <div className="project-detail-value">{selectedProject.department}</div>
                             </div>
 
                             <div className="project-detail-item">

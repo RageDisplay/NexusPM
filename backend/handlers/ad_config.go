@@ -65,14 +65,14 @@ func (h *ADConfigHandler) GetADConfig(c *gin.Context) {
 // SetupADConfig сохраняет или обновляет конфигурацию AD
 func (h *ADConfigHandler) SetupADConfig(c *gin.Context) {
 	var req struct {
-		Enabled         bool   `json:"enabled" binding:"required"`
-		DirectoryType   string `json:"directory_type" binding:"required"` // "active_directory" или "freeipa"
-		ServerURL       string `json:"server_url" binding:"required"`
-		BaseDN          string `json:"base_dn" binding:"required"`
-		BindDN          string `json:"bind_dn" binding:"required"`
-		BindPassword    string `json:"bind_password" binding:"required"`
-		UserSearchBase  string `json:"user_search_base" binding:"required"`
-		UserNameAttr    string `json:"user_name_attr" binding:"required"`
+		Enabled         bool   `json:"enabled"`
+		DirectoryType   string `json:"directory_type"`
+		ServerURL       string `json:"server_url"`
+		BaseDN          string `json:"base_dn"`
+		BindDN          string `json:"bind_dn"`
+		BindPassword    string `json:"bind_password"`
+		UserSearchBase  string `json:"user_search_base"`
+		UserNameAttr    string `json:"user_name_attr"`
 		DepartmentAttr  string `json:"department_attr"`
 		EmailAttr       string `json:"email_attr"`
 		GroupSearchBase string `json:"group_search_base"`
@@ -84,10 +84,20 @@ func (h *ADConfigHandler) SetupADConfig(c *gin.Context) {
 		return
 	}
 
-	// Проверяем подключение к серверу LDAP перед сохранением
-	if err := h.testLDAPConnection(req.ServerURL, req.BindDN, req.BindPassword); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Не удалось подключиться к LDAP серверу: " + err.Error()})
-		return
+	// Если AD включается, проверяем обязательные поля
+	if req.Enabled {
+		if req.DirectoryType == "" || req.ServerURL == "" || req.BaseDN == "" ||
+			req.BindDN == "" || req.BindPassword == "" || req.UserSearchBase == "" ||
+			req.UserNameAttr == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Все обязательные поля должны быть заполнены для включения AD"})
+			return
+		}
+
+		// Проверяем подключение к серверу LDAP только если AD включается
+		if err := h.testLDAPConnection(req.ServerURL, req.BindDN, req.BindPassword); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Не удалось подключиться к LDAP серверу: " + err.Error()})
+			return
+		}
 	}
 
 	// Получаем существующую конфигурацию

@@ -186,7 +186,7 @@ const ADConfigPanel = () => {
                 name="directory_type"
                 value={formData.directory_type}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               >
                 <option value="active_directory">Active Directory (AD)</option>
                 <option value="freeipa">FreeIPA</option>
@@ -201,7 +201,7 @@ const ADConfigPanel = () => {
                 placeholder="ldap://192.168.1.100:389"
                 value={formData.server_url}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               />
               <small>Пример: ldap://dc.example.com:389 или ldaps://dc.example.com:636</small>
             </div>
@@ -214,7 +214,7 @@ const ADConfigPanel = () => {
                 placeholder="dc=example,dc=com"
                 value={formData.base_dn}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               />
             </div>
           </div>
@@ -230,7 +230,7 @@ const ADConfigPanel = () => {
                 placeholder="cn=service_account,cn=users,dc=example,dc=com"
                 value={formData.bind_dn}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               />
             </div>
 
@@ -242,7 +242,7 @@ const ADConfigPanel = () => {
                 placeholder="Пароль"
                 value={formData.bind_password}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               />
             </div>
 
@@ -250,7 +250,7 @@ const ADConfigPanel = () => {
               type="button"
               onClick={handleTestConnection}
               className="btn btn-secondary"
-              disabled={isLoading || !formData.server_url || !formData.bind_dn}
+              disabled={isLoading || !formData.enabled || !formData.server_url || !formData.bind_dn}
             >
               Проверить подключение
             </button>
@@ -267,7 +267,7 @@ const ADConfigPanel = () => {
                 placeholder="ou=Users,dc=example,dc=com"
                 value={formData.user_search_base}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               />
             </div>
 
@@ -279,7 +279,7 @@ const ADConfigPanel = () => {
                 placeholder="sAMAccountName (для AD) или uid (для FreeIPA)"
                 value={formData.user_name_attr}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               />
               <small>AD: sAMAccountName, FreeIPA: uid</small>
             </div>
@@ -292,7 +292,7 @@ const ADConfigPanel = () => {
                 placeholder="department"
                 value={formData.department_attr}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               />
             </div>
 
@@ -304,7 +304,7 @@ const ADConfigPanel = () => {
                 placeholder="mail"
                 value={formData.email_attr}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               />
             </div>
 
@@ -316,7 +316,7 @@ const ADConfigPanel = () => {
                 placeholder="ou=Groups,dc=example,dc=com"
                 value={formData.group_search_base}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
               />
             </div>
 
@@ -327,7 +327,7 @@ const ADConfigPanel = () => {
                 name="sync_interval"
                 value={formData.sync_interval}
                 onChange={handleInputChange}
-                disabled={isLoading}
+                disabled={isLoading || !formData.enabled}
                 min="1"
               />
             </div>

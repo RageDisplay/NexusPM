@@ -39,6 +39,7 @@ type Project struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	CreatedBy   int       `json:"created_by"`
+	Department  string    `json:"department"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

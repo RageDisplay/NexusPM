@@ -66,6 +66,7 @@ func InitDB() (*sql.DB, error) {
         name VARCHAR(255) NOT NULL UNIQUE,
         description TEXT,
         created_by INTEGER NOT NULL,
+        department VARCHAR(100) NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (created_by) REFERENCES users (id)
