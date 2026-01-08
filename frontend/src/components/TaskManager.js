@@ -340,7 +340,7 @@ const TaskManager = () => {
                         disabled={loading}
                     />
                 </div>
-                <button type="submit" disabled={loading}>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
                     {loading ? 'Создание...' : 'Создать'}
                 </button>
             </form>
