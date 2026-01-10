@@ -24,6 +24,7 @@ func main() {
 	reportHandler := handlers.NewReportHandler(db)
 	projectHandler := handlers.NewProjectHandler(db)
 	adConfigHandler := handlers.NewADConfigHandler(db)
+	passwordRequestsHandler := handlers.NewPasswordRequestHandler(db)
 
 	router := gin.Default()
 
@@ -45,6 +46,8 @@ func main() {
 	// Публичные маршруты
 	router.POST("/api/register", authHandler.Register)
 	router.POST("/api/login", authHandler.Login)
+	// Public endpoint for forgot-password requests
+	router.POST("/api/password-reset-requests", passwordRequestsHandler.CreateRequest)
 	router.POST("/api/auth/set-department", authHandler.SetDepartmentOnFirstLogin)
 	router.GET("/api/ad-config/status", adConfigHandler.GetADConfigStatus)
 	router.GET("/api/auth/departments", authHandler.GetDepartments)
@@ -56,6 +59,9 @@ func main() {
 		// Авторизация
 		api.GET("/auth/profile", authHandler.GetProfile)
 		api.PUT("/auth/department", authHandler.UpdateDepartment)
+		api.POST("/auth/change-password", authHandler.ChangePassword)
+		api.POST("/auth/set-new-password", authHandler.SetNewPasswordAfterReset)
+		api.POST("/users/:id/reset-password", middleware.AdminOnly(), authHandler.ResetPassword)
 
 		// Задачи
 		api.GET("/tasks", taskHandler.GetTasks)
@@ -76,6 +82,9 @@ func main() {
 
 		// Пользователи (только для админов)
 		api.GET("/users", userHandler.GetUsers)
+		// Admin endpoints to manage password reset requests
+		api.GET("/password-reset-requests", middleware.AdminOnly(), passwordRequestsHandler.ListRequests)
+		api.POST("/password-reset-requests/:id/process", middleware.AdminOnly(), passwordRequestsHandler.ProcessRequest)
 		api.PUT("/users/:id/role", middleware.AdminOnly(), userHandler.UpdateUserRole)
 		api.PUT("/users/:id/department", middleware.AdminOnly(), userHandler.UpdateUserDepartment)
 		api.DELETE("/users/:id", middleware.AdminOnly(), userHandler.DeleteUser)

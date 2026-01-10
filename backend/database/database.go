@@ -35,6 +35,7 @@ func InitDB() (*sql.DB, error) {
         department VARCHAR(100),
         is_ad_user BOOLEAN DEFAULT 0,
         ad_user_id VARCHAR(255),
+        password_reset_required BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );`
@@ -105,6 +106,22 @@ func InitDB() (*sql.DB, error) {
     );`
 
 	tables := []string{createUsersTable, createProjectsTable, createUserProjectsTable, createTasksTable, createADConfigTable}
+
+	// Таблица заявок на сброс пароля
+	createPasswordRequestsTable := `
+    CREATE TABLE IF NOT EXISTS password_reset_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        username VARCHAR(50),
+        message TEXT,
+        status VARCHAR(20) DEFAULT 'open',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        processed_by INTEGER,
+        processed_at DATETIME,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    );`
+
+	tables = append(tables, createPasswordRequestsTable)
 	for _, table := range tables {
 		_, err = db.Exec(table)
 		if err != nil {

@@ -8,6 +8,13 @@ const Login = () => {
   const [authType, setAuthType] = useState('auto'); // 'auto', 'local', 'ad'
   const [adEnabled, setAdEnabled] = useState(false);
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
+  const [resetPasswordData, setResetPasswordData] = useState({
+    token: null,
+    user: null,
+    newPassword: '',
+    confirmPassword: ''
+  });
   const [departmentModalData, setDepartmentModalData] = useState({
     token: null,
     user: null,
@@ -21,6 +28,10 @@ const Login = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showForgotForm, setShowForgotForm] = useState(false);
+  const [forgotRequestMessage, setForgotRequestMessage] = useState('');
+  const [forgotRequestSubmitting, setForgotRequestSubmitting] = useState(false);
+  const [forgotRequestSent, setForgotRequestSent] = useState(false);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -140,6 +151,9 @@ const Login = () => {
       const response = await api.post(endpoint, payload);
       
       if (response.data.token) {
+        // Проверяем, требуется ли сброс пароля
+        const passwordResetRequired = isLogin && response.data.user.password_reset_required;
+        
         // Если это пользователь из AD без отдела, показываем модальное окно
         const isADUserWithoutDepartment = isLogin && 
           response.data.user.is_ad_user && 
@@ -147,8 +161,17 @@ const Login = () => {
         
         console.log('Login response user:', response.data.user);
         console.log('Is AD user without department:', isADUserWithoutDepartment);
+        console.log('Password reset required:', passwordResetRequired);
         
-        if (isADUserWithoutDepartment) {
+        if (passwordResetRequired) {
+          setResetPasswordData({
+            token: response.data.token,
+            user: response.data.user,
+            newPassword: '',
+            confirmPassword: ''
+          });
+          setShowPasswordResetModal(true);
+        } else if (isADUserWithoutDepartment) {
           setDepartmentModalData({
             token: response.data.token,
             user: response.data.user,
@@ -167,6 +190,26 @@ const Login = () => {
     }
   };
 
+  const submitForgotRequest = async () => {
+    if (!formData.username) {
+      setError('Введите имя пользователя перед отправкой запроса');
+      return;
+    }
+    setForgotRequestSubmitting(true);
+    try {
+      await api.post('/api/password-reset-requests', {
+        username: formData.username,
+        message: forgotRequestMessage
+      });
+      setForgotRequestSent(true);
+      setShowForgotForm(false);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Ошибка отправки заявки');
+    } finally {
+      setForgotRequestSubmitting(false);
+    }
+  };
+
   const handleInputChange = (e, field) => {
     setFormData({...formData, [field]: e.target.value});
   };
@@ -174,6 +217,50 @@ const Login = () => {
   const togglePasswordVisibility = () => {
       setShowPassword(!showPassword);
     };
+
+  const handlePasswordResetModalSubmit = async () => {
+    setError('');
+
+    if (!resetPasswordData.newPassword) {
+      setError('Пожалуйста, введите новый пароль');
+      return;
+    }
+
+    if (resetPasswordData.newPassword.length < 6) {
+      setError('Пароль должен содержать минимум 6 символов');
+      return;
+    }
+
+    if (resetPasswordData.newPassword !== resetPasswordData.confirmPassword) {
+      setError('Пароли не совпадают');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Используем временный токен для установки нового пароля
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${resetPasswordData.token}`
+        }
+      };
+
+      await api.post('/api/auth/set-new-password', {
+        new_password: resetPasswordData.newPassword
+      }, config);
+
+      // После успешного сброса входим в систему
+      login(resetPasswordData.user, resetPasswordData.token);
+      setShowPasswordResetModal(false);
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      setError(error.response?.data?.error || 'Ошибка при установке нового пароля');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="login-container">
@@ -293,6 +380,33 @@ const Login = () => {
             </div>
           </div>
         )}
+        {forgotRequestSent && (
+          <div className="success-message" style={{marginTop: '12px'}}>
+            <div className="error-content">
+              <span>Заявка отправлена. Администратор свяжется с вами.</span>
+            </div>
+          </div>
+        )}
+        {error && isLogin && (authType === 'local' || authType === 'auto') && !forgotRequestSent && (
+          <div style={{marginTop: '8px'}}>
+            {!showForgotForm ? (
+              <button type="button" className="btn-link" onClick={() => setShowForgotForm(true)}>Забыли пароль? Отправить запрос администратору</button>
+            ) : (
+              <div style={{marginTop: '8px'}}>
+                <textarea
+                  placeholder="Дополнительная информация (необязательно)"
+                  value={forgotRequestMessage}
+                  onChange={(e) => setForgotRequestMessage(e.target.value)}
+                  style={{width: '100%', minHeight: '80px'}}
+                />
+                <div style={{marginTop: '8px'}}>
+                  <button className="btn btn-primary" type="button" onClick={submitForgotRequest} disabled={forgotRequestSubmitting}>{forgotRequestSubmitting ? 'Отправка...' : 'Отправить заявку'}</button>
+                  <button className="btn btn-cancel" type="button" style={{marginLeft: '8px'}} onClick={() => setShowForgotForm(false)}>Отмена</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <button type="submit" className="btn btn-primary" disabled={isLoading}>
           {isLoading ? 'Пожалуйста, ожидайте...' : (isLogin ? 'Авторизация' : 'Регистрация')}
         </button>
@@ -316,6 +430,74 @@ const Login = () => {
           {isLogin ? 'Регистрация' : 'Авторизация'}
         </button>
       </p>
+
+      {/* Модальное окно для установки нового пароля после сброса */}
+      {showPasswordResetModal && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <div className="modal-header">
+              <h3>Установка нового пароля</h3>
+            </div>
+            <div className="modal-body">
+              <p>Администратор потребовал смену вашего пароля. Пожалуйста, установите новый пароль:</p>
+              <div className="form-group">
+                <label htmlFor="new-password">Новый пароль</label>
+                <input
+                  type="password"
+                  id="new-password"
+                  value={resetPasswordData.newPassword}
+                  onChange={(e) => setResetPasswordData({
+                    ...resetPasswordData,
+                    newPassword: e.target.value
+                  })}
+                  placeholder="Введите новый пароль"
+                  disabled={isLoading}
+                  minLength="6"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="confirm-password">Подтвердите пароль</label>
+                <input
+                  type="password"
+                  id="confirm-password"
+                  value={resetPasswordData.confirmPassword}
+                  onChange={(e) => setResetPasswordData({
+                    ...resetPasswordData,
+                    confirmPassword: e.target.value
+                  })}
+                  placeholder="Подтвердите новый пароль"
+                  disabled={isLoading}
+                  minLength="6"
+                />
+              </div>
+              {error && (
+                <div className="error">
+                  <div className="error-content">
+                    <span>{error}</span>
+                    <button 
+                      type="button"
+                      className="error-close"
+                      onClick={() => setError('')}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handlePasswordResetModalSubmit}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Установка пароля...' : 'Установить пароль'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модальное окно для выбора отдела при первом входе пользователя из AD */}
       {showDepartmentModal && (

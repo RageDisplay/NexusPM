@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"task-management-backend/database"
 	"task-management-backend/ldap"
 	"task-management-backend/models"
@@ -226,9 +227,9 @@ func (h *AuthHandler) loginLocal(username, password string) (*models.User, strin
 	log.Printf("loginLocal: querying for local user %s", username)
 
 	err := h.db.QueryRow(
-		"SELECT id, username, password_hash, role, department, is_ad_user FROM users WHERE username = ? AND is_ad_user = 0",
+		"SELECT id, username, password_hash, role, department, is_ad_user, password_reset_required FROM users WHERE username = ? AND is_ad_user = 0",
 		username,
-	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Role, &user.Department, &user.IsADUser)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Role, &user.Department, &user.IsADUser, &user.PasswordResetRequired)
 
 	if err == sql.ErrNoRows {
 		log.Printf("loginLocal: user %s not found in local database", username)
@@ -270,11 +271,12 @@ func (h *AuthHandler) returnLoginResponse(c *gin.Context, user *models.User, tok
 	}
 
 	responseUser := gin.H{
-		"id":         user.ID,
-		"username":   user.Username,
-		"role":       user.Role,
-		"department": department,
-		"is_ad_user": user.IsADUser,
+		"id":                      user.ID,
+		"username":                user.Username,
+		"role":                    user.Role,
+		"department":              department,
+		"is_ad_user":              user.IsADUser,
+		"password_reset_required": user.PasswordResetRequired,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -341,10 +343,10 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 	var user models.User
 
 	err := h.db.QueryRow(`
-		SELECT id, username, role, department, is_ad_user, created_at
+		SELECT id, username, role, department, is_ad_user, password_reset_required, created_at
 		FROM users
 		WHERE id = ?
-	`, userID).Scan(&user.ID, &user.Username, &user.Role, &user.Department, &user.IsADUser, &user.CreatedAt)
+	`, userID).Scan(&user.ID, &user.Username, &user.Role, &user.Department, &user.IsADUser, &user.PasswordResetRequired, &user.CreatedAt)
 
 	if err != nil {
 		log.Printf("GetProfile error: failed to get user %d: %v", userID, err)
@@ -358,12 +360,13 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":         user.ID,
-		"username":   user.Username,
-		"role":       user.Role,
-		"department": department,
-		"is_ad_user": user.IsADUser,
-		"created_at": user.CreatedAt,
+		"id":                      user.ID,
+		"username":                user.Username,
+		"role":                    user.Role,
+		"department":              department,
+		"is_ad_user":              user.IsADUser,
+		"password_reset_required": user.PasswordResetRequired,
+		"created_at":              user.CreatedAt,
 	})
 }
 
@@ -536,5 +539,216 @@ func (h *AuthHandler) SetDepartmentOnFirstLogin(c *gin.Context) {
 			"department": departmentStr,
 			"is_ad_user": user.IsADUser,
 		},
+	})
+}
+
+// ResetPassword сбрасывает пароль пользователя (только для админов)
+// Устанавливает флаг password_reset_required в true
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	userID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	currentUserID := c.GetInt("userID")
+	var user models.User
+
+	// Получаем информацию о пользователе
+	err = h.db.QueryRow(
+		"SELECT id, username, role, is_ad_user FROM users WHERE id = ?",
+		userID,
+	).Scan(&user.ID, &user.Username, &user.Role, &user.IsADUser)
+
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь не найден"})
+		return
+	} else if err != nil {
+		log.Printf("ResetPassword error: database query failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении информации о пользователе"})
+		return
+	}
+
+	// Нельзя сбросить пароль AD пользователям
+	if user.IsADUser {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Нельзя сбросить пароль пользователю из Active Directory"})
+		return
+	}
+
+	log.Printf("ResetPassword: admin %d is resetting password for user %d (%s)", currentUserID, userID, user.Username)
+
+	// Устанавливаем флаг password_reset_required
+	result, err := h.db.Exec(
+		"UPDATE users SET password_reset_required = 1, updated_at = ? WHERE id = ?",
+		time.Now(), userID,
+	)
+
+	if err != nil {
+		log.Printf("ResetPassword error: failed to update user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при сбросе пароля"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь не найден"})
+		return
+	}
+
+	log.Printf("ResetPassword: password reset flag set for user %d", userID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Пароль пользователя %s отмечен к сбросу. Пользователю необходимо установить новый пароль при входе.", user.Username),
+	})
+}
+
+// SetNewPasswordAfterReset позволяет пользователю установить новый пароль после сброса
+func (h *AuthHandler) SetNewPasswordAfterReset(c *gin.Context) {
+	userID := c.GetInt("userID")
+
+	var req struct {
+		NewPassword string `json:"new_password" binding:"required,min=6"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("SetNewPasswordAfterReset error - JSON bind failed: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Printf("SetNewPasswordAfterReset: user %d is setting new password", userID)
+
+	var user models.User
+
+	// Проверяем, что флаг password_reset_required установлен
+	err := h.db.QueryRow(
+		"SELECT id, username, password_reset_required FROM users WHERE id = ?",
+		userID,
+	).Scan(&user.ID, &user.Username, &user.PasswordResetRequired)
+
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь не найден"})
+		return
+	} else if err != nil {
+		log.Printf("SetNewPasswordAfterReset error: database query failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при проверке данных"})
+		return
+	}
+
+	if !user.PasswordResetRequired {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Сброс пароля не требуется"})
+		return
+	}
+
+	// Хешируем новый пароль
+	hashedPassword, err := database.HashPassword(req.NewPassword)
+	if err != nil {
+		log.Printf("SetNewPasswordAfterReset error: failed to hash password for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при обработке пароля"})
+		return
+	}
+
+	// Обновляем пароль и сбрасываем флаг
+	result, err := h.db.Exec(
+		"UPDATE users SET password_hash = ?, password_reset_required = 0, updated_at = ? WHERE id = ?",
+		hashedPassword, time.Now(), userID,
+	)
+
+	if err != nil {
+		log.Printf("SetNewPasswordAfterReset error: failed to update user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при установке нового пароля"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь не найден"})
+		return
+	}
+
+	log.Printf("SetNewPasswordAfterReset: password successfully updated for user %d", userID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Пароль успешно установлен",
+	})
+}
+
+// ChangePassword позволяет пользователю изменить пароль самостоятельно
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	userID := c.GetInt("userID")
+
+	var req struct {
+		CurrentPassword string `json:"current_password" binding:"required"`
+		NewPassword     string `json:"new_password" binding:"required,min=6"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("ChangePassword error - JSON bind failed: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Printf("ChangePassword: user %d is changing password", userID)
+
+	var user models.User
+
+	// Получаем текущий хеш пароля
+	err := h.db.QueryRow(
+		"SELECT id, username, password_hash, is_ad_user FROM users WHERE id = ?",
+		userID,
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.IsADUser)
+
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь не найден"})
+		return
+	} else if err != nil {
+		log.Printf("ChangePassword error: database query failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении данных"})
+		return
+	}
+
+	// Пользователи AD не могут менять пароль локально
+	if user.IsADUser {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Пользователи Active Directory не могут менять пароль в системе"})
+		return
+	}
+
+	// Проверяем текущий пароль
+	if !database.CheckPasswordHash(req.CurrentPassword, user.PasswordHash) {
+		log.Printf("ChangePassword: invalid current password for user %d", userID)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Текущий пароль неверен"})
+		return
+	}
+
+	// Хешируем новый пароль
+	hashedPassword, err := database.HashPassword(req.NewPassword)
+	if err != nil {
+		log.Printf("ChangePassword error: failed to hash password for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при обработке пароля"})
+		return
+	}
+
+	// Обновляем пароль
+	result, err := h.db.Exec(
+		"UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+		hashedPassword, time.Now(), userID,
+	)
+
+	if err != nil {
+		log.Printf("ChangePassword error: failed to update user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при изменении пароля"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь не найден"})
+		return
+	}
+
+	log.Printf("ChangePassword: password successfully changed for user %d", userID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Пароль успешно изменен",
 	})
 }

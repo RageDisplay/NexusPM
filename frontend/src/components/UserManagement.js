@@ -8,11 +8,47 @@ const UserManagement = () => {
     const [savingDepartments, setSavingDepartments] = useState({});
     const [departmentChanges, setDepartmentChanges] = useState({});
     const [deletingUsers, setDeletingUsers] = useState({});
+    const [resettingPasswords, setResettingPasswords] = useState({});
+    const [passwordRequests, setPasswordRequests] = useState([]);
+    const [processingRequests, setProcessingRequests] = useState({});
     const { user: currentUser } = useAuth();
 
     useEffect(() => {
         fetchUsers();
+        if (currentUser?.role === 'admin') fetchPasswordRequests();
     }, []);
+
+    // Run when currentUser becomes available
+    React.useEffect(() => {
+        if (currentUser?.role === 'admin') fetchPasswordRequests();
+    }, [currentUser]);
+
+    const fetchPasswordRequests = async () => {
+        try {
+            const resp = await api.get('/api/password-reset-requests');
+            setPasswordRequests(resp.data.requests || []);
+        } catch (err) {
+            console.error('Error fetching password requests', err);
+        }
+    };
+
+    const processPasswordRequest = async (requestId) => {
+        if (!window.confirm('Обработать заявку и сгенерировать временный пароль?')) return;
+        try {
+            setProcessingRequests(prev => ({...prev, [requestId]: true}));
+            const resp = await api.post(`/api/password-reset-requests/${requestId}/process`);
+            const temp = resp.data.temp_password;
+            alert(`Временный пароль для пользователя: ${temp}\nПередайте его пользователю безопасным каналом.`);
+            // refresh lists
+            fetchPasswordRequests();
+            fetchUsers();
+        } catch (err) {
+            console.error('Error processing request', err);
+            alert('Ошибка обработки заявки: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setProcessingRequests(prev => ({...prev, [requestId]: false}));
+        }
+    };
 
     const fetchUsers = async () => {
         try {
@@ -46,6 +82,32 @@ const UserManagement = () => {
             alert('Error updating user role: ' + error.response?.data?.error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const resetUserPassword = async (userId, username, isADUser) => {
+        if (isADUser) {
+            alert('Нельзя сбросить пароль пользователю из Active Directory');
+            return;
+        }
+
+        if (!window.confirm(`Вы уверены, что хотите сбросить пароль пользователю "${username}"?\n\nПользователю будет предложено установить новый пароль при следующем входе.`)) {
+            return;
+        }
+
+        try {
+            setResettingPasswords(prev => ({ ...prev, [userId]: true }));
+            
+            const response = await api.post(`/api/users/${userId}/reset-password`);
+            
+            alert(response.data.message || 'Пароль успешно отмечен к сбросу');
+            
+        } catch (error) {
+            console.error('Error resetting password:', error);
+            const errorMessage = error.response?.data?.error || 'Unknown error';
+            alert('Ошибка сброса пароля: ' + errorMessage);
+        } finally {
+            setResettingPasswords(prev => ({ ...prev, [userId]: false }));
         }
     };
 
@@ -142,14 +204,36 @@ const UserManagement = () => {
         }
     };
 
-    // Нельзя удалить самого себя
+    // Нельзя удалить самого себя или стартового администратора (ID = 1)
     const canDeleteUser = (userItem) => {
-        return userItem.id !== currentUser.id;
+        return userItem.id !== currentUser.id && userItem.id !== 1;
     };
 
     return (
         <div>
             <h2>Настройка пользователей {loading && '(Загрузка...)'}</h2>
+            {currentUser?.role === 'admin' && (
+                <div style={{marginBottom: '18px', padding: '12px', background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '8px'}}>
+                    <h3 style={{marginTop:0}}>Заявки на сброс пароля</h3>
+                    {passwordRequests.length === 0 ? (
+                        <p style={{margin: '8px 0'}}>Нет открытых заявок.</p>
+                    ) : (
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+                            {passwordRequests.map(r => (
+                                <div key={r.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px'}}>
+                                    <div style={{flex:1}}>
+                                        <strong>{r.username || 'Неизвестный пользователь'}</strong>
+                                        <div style={{color: 'var(--text-secondary)'}}>{r.message}</div>
+                                    </div>
+                                    <div>
+                                        <button className="btn btn-primary" disabled={processingRequests[r.id]} onClick={() => processPasswordRequest(r.id)}>{processingRequests[r.id] ? 'Обработка...' : 'Обработать'}</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
             <div className="users-table">
                 <table>
                     <thead>
@@ -171,7 +255,7 @@ const UserManagement = () => {
                                     <select 
                                         value={userItem.role} 
                                         onChange={(e) => updateUserRole(userItem.id, e.target.value)}
-                                        disabled={loading}
+                                        disabled={loading || userItem.id === 1}
                                     >
                                         <option value="user">Сотрудник</option>
                                         <option value="manager">Руководитель</option>
@@ -228,6 +312,25 @@ const UserManagement = () => {
                                                     Cancel
                                                 </button>
                                             </div>
+                                        )}
+                                        {!userItem.is_ad_user && userItem.id !== 1 && (
+                                            <button 
+                                                className="btn-reset-password"
+                                                onClick={() => resetUserPassword(userItem.id, userItem.username, userItem.is_ad_user)}
+                                                disabled={resettingPasswords[userItem.id]}
+                                                style={{
+                                                    padding: '3px 8px',
+                                                    fontSize: '12px',
+                                                    backgroundColor: '#ffc107',
+                                                    color: '#000',
+                                                    border: 'none',
+                                                    borderRadius: '3px',
+                                                    cursor: resettingPasswords[userItem.id] ? 'not-allowed' : 'pointer',
+                                                    marginTop: '5px'
+                                                }}
+                                            >
+                                                {resettingPasswords[userItem.id] ? 'Сброс...' : 'Reset Пароль'}
+                                            </button>
                                         )}
                                         {canDeleteUser(userItem) && (
                                             <button 

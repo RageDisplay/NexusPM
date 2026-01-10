@@ -24,9 +24,9 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 	var err error
 
 	if userRole == "admin" {
-		rows, err = h.db.Query("SELECT id, username, role, department, created_at FROM users")
+		rows, err = h.db.Query("SELECT id, username, role, department, is_ad_user, created_at FROM users")
 	} else {
-		rows, err = h.db.Query("SELECT id, username, role, department, created_at FROM users WHERE department = ?", userDepartment)
+		rows, err = h.db.Query("SELECT id, username, role, department, is_ad_user, created_at FROM users WHERE department = ?", userDepartment)
 	}
 
 	if err != nil {
@@ -40,6 +40,7 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 		Username   string `json:"username"`
 		Role       string `json:"role"`
 		Department string `json:"department"`
+		IsADUser   bool   `json:"is_ad_user"`
 		CreatedAt  string `json:"created_at"`
 	}
 
@@ -48,7 +49,7 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 		var user UserResponse
 		var department sql.NullString
 
-		err := rows.Scan(&user.ID, &user.Username, &user.Role, &department, &user.CreatedAt)
+		err := rows.Scan(&user.ID, &user.Username, &user.Role, &department, &user.IsADUser, &user.CreatedAt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -68,6 +69,12 @@ func (h *UserHandler) UpdateUserRole(c *gin.Context) {
 	userID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	// Защита стартового администратора (ID = 1)
+	if userID == 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Нельзя изменить роль основного администратора системы"})
 		return
 	}
 
@@ -123,6 +130,12 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	currentUserID := c.GetInt("userID")
 	if userID == currentUserID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Нельзя удалить свой аккаунт"})
+		return
+	}
+
+	// Защита стартового администратора (ID = 1)
+	if userID == 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Нельзя удалить основного администратора системы"})
 		return
 	}
 

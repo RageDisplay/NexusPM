@@ -6,14 +6,15 @@ import (
 )
 
 type User struct {
-	ID           int            `json:"id"`
-	Username     string         `json:"username"`
-	PasswordHash string         `json:"-"`
-	Role         string         `json:"role"`
-	Department   sql.NullString `json:"department"`
-	CreatedAt    time.Time      `json:"created_at"`
-	ADUserID     sql.NullString `json:"ad_user_id"` // ID пользователя в AD
-	IsADUser     bool           `json:"is_ad_user"` // Флаг, что это пользователь из AD
+	ID                    int            `json:"id"`
+	Username              string         `json:"username"`
+	PasswordHash          string         `json:"-"`
+	Role                  string         `json:"role"`
+	Department            sql.NullString `json:"department"`
+	CreatedAt             time.Time      `json:"created_at"`
+	ADUserID              sql.NullString `json:"ad_user_id"` // ID пользователя в AD
+	IsADUser              bool           `json:"is_ad_user"` // Флаг, что это пользователь из AD
+	PasswordResetRequired bool           `json:"password_reset_required"`
 }
 
 type ADConfig struct {

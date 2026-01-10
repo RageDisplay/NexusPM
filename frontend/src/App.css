@@ -2038,6 +2038,9 @@ button:disabled {
   width: 90%;
   animation: modalSlideIn 0.3s ease-out;
   overflow: hidden;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes modalSlideIn {
@@ -2075,6 +2078,9 @@ button:disabled {
 
 .modal-body {
   padding: 24px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .modal-body p {
@@ -2265,3 +2271,39 @@ button:disabled {
 
 /* Replace specific hardcoded greens */
 code, .badge-green { color: #ffd7b3; }
+/* Styles for password reset modal inputs */
+.modal-body .form-group {
+  margin-bottom: 15px;
+}
+
+.modal-body .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.modal-body .form-group input[type="password"],
+.modal-body .form-group input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: rgba(255, 159, 67, 0.02);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.modal-body .form-group input[type="password"]:focus,
+.modal-body .form-group input[type="text"]:focus {
+  background-color: rgba(255, 159, 67, 0.06);
+  box-shadow: 0 0 0 3px rgba(255, 159, 67, 0.12);
+  border-color: var(--primary);
+  outline: none;
+}
+
+.modal-body .form-group input[type="password"]::placeholder,
+.modal-body .form-group input[type="text"]::placeholder {
+  color: var(--text-secondary);
+}
