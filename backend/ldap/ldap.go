@@ -283,8 +283,8 @@ func (lm *LDAPManager) SyncADUsers() (int, error) {
 				VALUES (?, ?, ?, ?, ?, ?, ?)
 			`,
 				username,
-				"",     // AD users don't have password hash
-				"user", // Default role
+				"",     // Пользователи AD не имеют локального пароля
+				"user", // По умолчанию роль "user"
 				sql.NullString{String: department, Valid: department != ""},
 				true,
 				time.Now(),

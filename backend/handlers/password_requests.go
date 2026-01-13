@@ -20,7 +20,7 @@ func NewPasswordRequestHandler(db *sql.DB) *PasswordRequestHandler {
 	return &PasswordRequestHandler{db: db}
 }
 
-// Public: create a password reset request (user forgot password)
+// Создать заявку на сброс пароля
 func (h *PasswordRequestHandler) CreateRequest(c *gin.Context) {
 	var req struct {
 		Username string `json:"username" binding:"required"`
@@ -31,7 +31,7 @@ func (h *PasswordRequestHandler) CreateRequest(c *gin.Context) {
 		return
 	}
 
-	// Try to find user id; may be nil if user not found — we still create a request but without user_id
+	// Попытка найти пользователя
 	var userID sql.NullInt64
 	var foundUsername sql.NullString
 	err := h.db.QueryRow("SELECT id, username FROM users WHERE username = ?", req.Username).Scan(&userID, &foundUsername)
@@ -40,7 +40,7 @@ func (h *PasswordRequestHandler) CreateRequest(c *gin.Context) {
 		return
 	}
 
-	// Insert request
+	// Отправляем заявку, даже если пользователь не найден, чтобы не раскрывать информацию
 	_, err = h.db.Exec("INSERT INTO password_reset_requests (user_id, username, message, status, created_at) VALUES (?, ?, ?, 'open', ?)",
 		userID, req.Username, req.Message, time.Now())
 	if err != nil {
@@ -48,11 +48,11 @@ func (h *PasswordRequestHandler) CreateRequest(c *gin.Context) {
 		return
 	}
 
-	// For security, don't reveal whether user exists; return generic message
+	// Для безопасности не сообщаем, найден пользователь или нет
 	c.JSON(http.StatusOK, gin.H{"message": "Заявка отправлена. Администратор рассмотрит запрос."})
 }
 
-// Admin: list open requests
+// Админ: список открытых заявок
 func (h *PasswordRequestHandler) ListRequests(c *gin.Context) {
 	rows, err := h.db.Query("SELECT id, user_id, username, message, status, created_at, processed_by, processed_at FROM password_reset_requests WHERE status = 'open' ORDER BY created_at DESC")
 	if err != nil {
@@ -88,11 +88,11 @@ func (h *PasswordRequestHandler) ListRequests(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"requests": list})
 }
 
-// Admin: process request and generate temporary password
+// Админ: обработать заявку
 func (h *PasswordRequestHandler) ProcessRequest(c *gin.Context) {
 	reqID := c.Param("id")
 
-	// Find request and associated user_id
+	// Найти заявку
 	var userID sql.NullInt64
 	var username sql.NullString
 	err := h.db.QueryRow("SELECT user_id, username FROM password_reset_requests WHERE id = ? AND status = 'open'", reqID).Scan(&userID, &username)
@@ -110,7 +110,7 @@ func (h *PasswordRequestHandler) ProcessRequest(c *gin.Context) {
 		return
 	}
 
-	// Check user is not AD user
+	// Проверить, что пользователь не является AD-пользователем
 	var isADUser bool
 	var dbUserID int
 	err = h.db.QueryRow("SELECT id, is_ad_user FROM users WHERE id = ?", userID.Int64).Scan(&dbUserID, &isADUser)
@@ -127,7 +127,7 @@ func (h *PasswordRequestHandler) ProcessRequest(c *gin.Context) {
 		return
 	}
 
-	// Generate temporary password
+	// Генерация временного пароля
 	tempPassword, err := generateTempPassword(12)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось сгенерировать временный пароль"})
@@ -140,14 +140,14 @@ func (h *PasswordRequestHandler) ProcessRequest(c *gin.Context) {
 		return
 	}
 
-	// Update user's password and mark password_reset_required
+	// Обновить пароль пользователя в базе данных
 	_, err = h.db.Exec("UPDATE users SET password_hash = ?, password_reset_required = 1, updated_at = ? WHERE id = ?", hashed, time.Now(), userID.Int64)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Mark request processed
+	// Маркировать заявку как обработанную
 	adminID := c.GetInt("userID")
 	_, err = h.db.Exec("UPDATE password_reset_requests SET status = 'processed', processed_by = ?, processed_at = ? WHERE id = ?", adminID, time.Now(), reqID)
 	if err != nil {
@@ -155,8 +155,40 @@ func (h *PasswordRequestHandler) ProcessRequest(c *gin.Context) {
 		return
 	}
 
-	// Return temp password to admin so they can communicate it to user
+	// Возращаем временный пароль в ответе
 	c.JSON(http.StatusOK, gin.H{"message": "Заявка обработана", "temp_password": tempPassword})
+}
+
+// Админ: отклонить заявку
+func (h *PasswordRequestHandler) RejectRequest(c *gin.Context) {
+	reqID := c.Param("id")
+
+	// Найти заявку
+	var status string
+	err := h.db.QueryRow("SELECT status FROM password_reset_requests WHERE id = ?", reqID).Scan(&status)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Заявка не найдена"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if status != "open" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Только открытые заявки могут быть отклонены"})
+		return
+	}
+
+	// Маркировать заявку как отклоненную
+	adminID := c.GetInt("userID")
+	_, err = h.db.Exec("UPDATE password_reset_requests SET status = 'rejected', processed_by = ?, processed_at = ? WHERE id = ?", adminID, time.Now(), reqID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Заявка отклонена"})
 }
 
 func generateTempPassword(n int) (string, error) {

@@ -123,7 +123,7 @@ func (h *ADConfigHandler) SetupADConfig(c *gin.Context) {
 	}
 
 	if config.SyncInterval == 0 {
-		config.SyncInterval = 60 // Default 1 hour
+		config.SyncInterval = 60 // Час по умолчанию
 	}
 
 	var saveErr error

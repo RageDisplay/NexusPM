@@ -175,7 +175,7 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 			VALUES (?, ?, ?, ?, ?, ?, ?)
 		`,
 			username,
-			"", // AD users don't have password hash
+			"", // У доменных пользователей нет локального пароля
 			"user",
 			sql.NullString{String: userInfo.Department, Valid: userInfo.Department != ""},
 			true,

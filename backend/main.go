@@ -46,7 +46,7 @@ func main() {
 	// Публичные маршруты
 	router.POST("/api/register", authHandler.Register)
 	router.POST("/api/login", authHandler.Login)
-	// Public endpoint for forgot-password requests
+	// Публичные маршруты для заявок на сброс пароля
 	router.POST("/api/password-reset-requests", passwordRequestsHandler.CreateRequest)
 	router.POST("/api/auth/set-department", authHandler.SetDepartmentOnFirstLogin)
 	router.GET("/api/ad-config/status", adConfigHandler.GetADConfigStatus)
@@ -85,6 +85,7 @@ func main() {
 		// Admin endpoints to manage password reset requests
 		api.GET("/password-reset-requests", middleware.AdminOnly(), passwordRequestsHandler.ListRequests)
 		api.POST("/password-reset-requests/:id/process", middleware.AdminOnly(), passwordRequestsHandler.ProcessRequest)
+		api.POST("/password-reset-requests/:id/reject", middleware.AdminOnly(), passwordRequestsHandler.RejectRequest)
 		api.PUT("/users/:id/role", middleware.AdminOnly(), userHandler.UpdateUserRole)
 		api.PUT("/users/:id/department", middleware.AdminOnly(), userHandler.UpdateUserDepartment)
 		api.DELETE("/users/:id", middleware.AdminOnly(), userHandler.DeleteUser)

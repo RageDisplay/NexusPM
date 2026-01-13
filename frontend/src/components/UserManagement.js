@@ -15,10 +15,9 @@ const UserManagement = () => {
 
     useEffect(() => {
         fetchUsers();
-        if (currentUser?.role === 'admin') fetchPasswordRequests();
     }, []);
 
-    // Run when currentUser becomes available
+    // Запускать только если текущий пользователь - админ
     React.useEffect(() => {
         if (currentUser?.role === 'admin') fetchPasswordRequests();
     }, [currentUser]);
@@ -39,12 +38,28 @@ const UserManagement = () => {
             const resp = await api.post(`/api/password-reset-requests/${requestId}/process`);
             const temp = resp.data.temp_password;
             alert(`Временный пароль для пользователя: ${temp}\nПередайте его пользователю безопасным каналом.`);
-            // refresh lists
+            // обновить списки
             fetchPasswordRequests();
             fetchUsers();
         } catch (err) {
             console.error('Error processing request', err);
             alert('Ошибка обработки заявки: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setProcessingRequests(prev => ({...prev, [requestId]: false}));
+        }
+    };
+
+    const rejectPasswordRequest = async (requestId) => {
+        if (!window.confirm('Вы уверены, что хотите отклонить эту заявку?')) return;
+        try {
+            setProcessingRequests(prev => ({...prev, [requestId]: true}));
+            await api.post(`/api/password-reset-requests/${requestId}/reject`);
+            alert('Заявка отклонена');
+            // обновить списки
+            fetchPasswordRequests();
+        } catch (err) {
+            console.error('Error rejecting request', err);
+            alert('Ошибка отклонения заявки: ' + (err.response?.data?.error || err.message));
         } finally {
             setProcessingRequests(prev => ({...prev, [requestId]: false}));
         }
@@ -225,8 +240,9 @@ const UserManagement = () => {
                                         <strong>{r.username || 'Неизвестный пользователь'}</strong>
                                         <div style={{color: 'var(--text-secondary)'}}>{r.message}</div>
                                     </div>
-                                    <div>
+                                    <div style={{display: 'flex', gap: '8px'}}>
                                         <button className="btn btn-primary" disabled={processingRequests[r.id]} onClick={() => processPasswordRequest(r.id)}>{processingRequests[r.id] ? 'Обработка...' : 'Обработать'}</button>
+                                        <button className="btn btn-secondary" disabled={processingRequests[r.id]} onClick={() => rejectPasswordRequest(r.id)} style={{backgroundColor: '#dc3545'}}>{processingRequests[r.id] ? 'Обработка...' : 'Отклонить'}</button>
                                     </div>
                                 </div>
                             ))}

@@ -38,12 +38,13 @@ const ProjectManagement = () => {
         try {
             const response = await api.get('/api/users');
             if (response.data) {
-                let userList = response.data.filter(u => u.role === 'user');
+                let userList = response.data;
                 
-                // Для менеджера - только пользователи его отдела (для назначения)
+                // Для менеджера - только пользователи его отдела (любой роли)
                 if (user?.role === 'manager') {
                     userList = userList.filter(u => u.department === user?.department);
                 }
+                // Для админа - все пользователи
                 
                 setUsers(userList);
             }
@@ -273,14 +274,14 @@ const ProjectManagement = () => {
                                             onChange={(e) => setSelectedUserId(parseInt(e.target.value) || '')}
                                         >
                                             <option value="">-- Выберите сотрудника --</option>
-                                            {/* Для менеджера и админа добавляем их самих в список */}
-                                            {(user?.role === 'manager' || user?.role === 'admin') && (
+                                            {/* Для менеджера и админа добавляем их самих в список, если они еще не добавлены */}
+                                            {(user?.role === 'manager' || user?.role === 'admin') && !projectUsers.some(pu => pu.id === user.id) && (
                                                 <option value={user.id}>
                                                     {user.username} ({user.department}) - Я
                                                 </option>
                                             )}
                                             {users
-                                                .filter(u => !projectUsers.some(pu => pu.id === u.id))
+                                                .filter(u => !projectUsers.some(pu => pu.id === u.id) && u.id !== user.id)
                                                 .map(u => (
                                                     <option key={u.id} value={u.id}>
                                                         {u.username} ({u.department})

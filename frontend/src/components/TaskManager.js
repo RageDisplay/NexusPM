@@ -43,7 +43,7 @@ const TaskManager = () => {
         try {
             const response = await api.get('/api/users');
             if (response.data) {
-                const filtered = response.data.filter(u => u.role === 'user' && u.department === user?.department);
+                const filtered = response.data.filter(u => u.department === user?.department);
                 setDepartmentUsers(filtered);
             }
         } catch (error) {
@@ -126,46 +126,6 @@ const TaskManager = () => {
             alert('Ошибка в изменении шкалы прогресса: ' + (error.response?.data?.error || error.message));
         }
     };
-
-    /*const updateHoursPerWeek = async (taskId, hoursPerWeek) => {
-        try {
-            const task = tasks.find(t => t.id === taskId);
-            await api.put(`/api/tasks/${taskId}`, {
-                ...task,
-                hours_per_week: parseFloat(hoursPerWeek) || 0
-            });
-            
-            setTasks(prevTasks => 
-                prevTasks.map(t => 
-                    t.id === taskId ? { ...t, hours_per_week: parseFloat(hoursPerWeek) || 0 } : t
-                )
-            );
-            
-        } catch (error) {
-            console.error('Error updating hours per week:', error);
-            alert('Error updating hours per week: ' + (error.response?.data?.error || error.message));
-        }
-    };
-
-    const updateLoadPerMonth = async (taskId, loadPerMonth) => {
-        try {
-            const task = tasks.find(t => t.id === taskId);
-            await api.put(`/api/tasks/${taskId}`, {
-                ...task,
-                load_per_month: parseInt(loadPerMonth) || 0
-            });
-            
-            setTasks(prevTasks => 
-                prevTasks.map(t => 
-                    t.id === taskId ? { ...t, load_per_month: parseInt(loadPerMonth) || 0 } : t
-                )
-            );
-            
-        } catch (error) {
-            console.error('Error updating load per month:', error);
-            alert('Error updating load per month: ' + (error.response?.data?.error || error.message));
-        }
-    };*/
 
     const startEditing = (task) => {
         setEditingTask({ ...task });

@@ -190,11 +190,22 @@ func (h *ProjectHandler) AssignProjectToUser(c *gin.Context) {
 
 	// Проверяем права менеджера и админа
 	if userRole == "manager" {
-		// Менеджер может назначать только своих сотрудников, но на проекты любых отделов
+		// Менеджер может назначать пользователей своего отдела (независимо от их роли)
 		var targetUserDept sql.NullString
 		err := h.db.QueryRow("SELECT department FROM users WHERE id = ?", req.UserID).Scan(&targetUserDept)
-		if err != nil || !targetUserDept.Valid || targetUserDept.String != userDepartment {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете назначать проекты только сотрудникам своего отдела"})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при проверке пользователя"})
+			return
+		}
+
+		// Проверяем, что пользователь из того же отдела
+		targetDept := ""
+		if targetUserDept.Valid {
+			targetDept = targetUserDept.String
+		}
+
+		if targetDept != userDepartment {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете назначать проекты только пользователям своего отдела"})
 			return
 		}
 	}
@@ -237,14 +248,24 @@ func (h *ProjectHandler) RemoveProjectFromUser(c *gin.Context) {
 
 	// Проверяем права менеджера и админа
 	if userRole == "manager" {
-		// Менеджер может удалять только у сотрудников своего отдела
+		// Менеджер может удалять проекты только у пользователей своего отдела
 		var targetUserDept sql.NullString
 		err := h.db.QueryRow("SELECT department FROM users WHERE id = ?", req.UserID).Scan(&targetUserDept)
-		if err != nil || !targetUserDept.Valid || targetUserDept.String != userDepartment {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять проекты только у сотрудников своего отдела"})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при проверке пользователя"})
 			return
 		}
 
+		// Проверяем, что пользователь из того же отдела
+		targetDept := ""
+		if targetUserDept.Valid {
+			targetDept = targetUserDept.String
+		}
+
+		if targetDept != userDepartment {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять проекты только у пользователей своего отдела"})
+			return
+		}
 	}
 	// Админ может удалять кого угодно со любого проекта (без дополнительных проверок)
 

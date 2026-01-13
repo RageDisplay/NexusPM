@@ -46,7 +46,7 @@ const ADConfigPanel = () => {
           department_attr: response.data.config.department_attr,
           email_attr: response.data.config.email_attr,
           group_search_base: response.data.config.group_search_base,
-          sync_interval: response.data.config.sync_interval
+          sync_interval: parseInt(response.data.config.sync_interval, 10)
         });
       }
     } catch (error) {
@@ -58,9 +58,17 @@ const ADConfigPanel = () => {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let newValue = value;
+    
+    if (type === 'checkbox') {
+      newValue = checked;
+    } else if (type === 'number') {
+      newValue = value === '' ? '' : parseInt(value, 10);
+    }
+    
     setFormData({
       ...formData,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: newValue
     });
   };
 
@@ -90,7 +98,13 @@ const ADConfigPanel = () => {
       setSuccessMessage('');
       setIsLoading(true);
 
-      await api.post('/api/ad-config', formData);
+      // Необходимо преобразовать sync_interval в число
+      const configToSave = {
+        ...formData,
+        sync_interval: parseInt(formData.sync_interval, 10)
+      };
+
+      await api.post('/api/ad-config', configToSave);
       setSuccessMessage('Конфигурация AD сохранена успешно!');
       setIsEditing(false);
       loadADConfig();
