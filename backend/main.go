@@ -25,6 +25,7 @@ func main() {
 	projectHandler := handlers.NewProjectHandler(db)
 	adConfigHandler := handlers.NewADConfigHandler(db)
 	passwordRequestsHandler := handlers.NewPasswordRequestHandler(db)
+	statisticsHandler := handlers.NewStatisticsHandler(db)
 
 	router := gin.Default()
 
@@ -94,6 +95,11 @@ func main() {
 		api.GET("/reports/my-tasks", reportHandler.ExportMyTasks)
 		api.GET("/reports/department-tasks", middleware.ManagerOrAdmin(), reportHandler.ExportDepartmentTasks)
 		api.GET("/reports/all-tasks", middleware.AdminOnly(), reportHandler.ExportAllTasks)
+
+		// Статистика отдела (для менеджеров и админов)
+		api.GET("/department-statistics", middleware.ManagerOrAdmin(), statisticsHandler.GetDepartmentStatistics)
+		api.DELETE("/department-tasks/clear", middleware.ManagerOrAdmin(), statisticsHandler.ClearDepartmentTasks)
+		api.GET("/weekly-hours", statisticsHandler.GetWeeklyHours)
 
 		// Бэкап БД
 		api.GET("/backup", middleware.AdminOnly(), handlers.BackupDB)

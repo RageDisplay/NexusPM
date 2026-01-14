@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import DepartmentStatistics from './DepartmentStatistics';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -18,6 +19,10 @@ const Dashboard = () => {
           <div className="number">{user?.department || 'Не установлен'}</div>
         </div>
       </div>
+      
+      {(user?.role === 'manager' || user?.role === 'admin') && (
+        <DepartmentStatistics />
+      )}
     </div>
   );
 };
