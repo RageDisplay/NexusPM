@@ -121,7 +121,36 @@ func InitDB() (*sql.DB, error) {
         FOREIGN KEY (user_id) REFERENCES users (id)
     );`
 
-	tables = append(tables, createPasswordRequestsTable)
+	// Таблица активностей пользователя
+	createActivityTable := `
+    CREATE TABLE IF NOT EXISTS activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        action_type VARCHAR(50) NOT NULL,
+        description TEXT,
+        task_id INTEGER,
+        project_id INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        FOREIGN KEY (task_id) REFERENCES tasks (id),
+        FOREIGN KEY (project_id) REFERENCES projects (id)
+    );`
+
+	// Таблица уведомлений
+	createNotificationsTable := `
+    CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        notification_type VARCHAR(50) NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT,
+        related_id INTEGER,
+        is_read BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    );`
+
+	tables = append(tables, createPasswordRequestsTable, createActivityTable, createNotificationsTable)
 	for _, table := range tables {
 		_, err = db.Exec(table)
 		if err != nil {

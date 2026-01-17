@@ -221,6 +221,13 @@ func (h *ProjectHandler) AssignProjectToUser(c *gin.Context) {
 		return
 	}
 
+	// Get project name for notification
+	var projectName string
+	h.db.QueryRow("SELECT name FROM projects WHERE id = ?", req.ProjectID).Scan(&projectName)
+
+	// Create notification for user
+	CreateNotification(h.db, req.UserID, "project_assigned", "Назначен новый проект", "Вам назначен проект: "+projectName, &req.ProjectID)
+
 	c.JSON(http.StatusCreated, gin.H{"message": "Проект успешно назначен"})
 }
 

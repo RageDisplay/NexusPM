@@ -26,6 +26,7 @@ func main() {
 	adConfigHandler := handlers.NewADConfigHandler(db)
 	passwordRequestsHandler := handlers.NewPasswordRequestHandler(db)
 	statisticsHandler := handlers.NewStatisticsHandler(db)
+	dashboardHandler := handlers.NewDashboardHandler(db)
 
 	router := gin.Default()
 
@@ -69,6 +70,7 @@ func main() {
 		api.POST("/tasks", taskHandler.CreateTask)
 		api.PUT("/tasks/:id", taskHandler.UpdateTask)
 		api.DELETE("/tasks/:id", taskHandler.DeleteTask)
+		api.POST("/tasks/:id/duplicate", taskHandler.DuplicateTask)
 
 		// Проекты
 		api.GET("/projects", projectHandler.GetProjects)
@@ -95,6 +97,14 @@ func main() {
 		api.GET("/reports/my-tasks", reportHandler.ExportMyTasks)
 		api.GET("/reports/department-tasks", middleware.ManagerOrAdmin(), reportHandler.ExportDepartmentTasks)
 		api.GET("/reports/all-tasks", middleware.AdminOnly(), reportHandler.ExportAllTasks)
+
+		// Dashboard статистика
+		api.GET("/dashboard/statistics", dashboardHandler.GetTaskStatistics)
+		api.GET("/dashboard/weekly-load", dashboardHandler.GetWeeklyLoad)
+		api.GET("/dashboard/progress-dynamics", dashboardHandler.GetProgressDynamics)
+		api.GET("/dashboard/activity", dashboardHandler.GetActivityLog)
+		api.GET("/dashboard/notifications", dashboardHandler.GetNotifications)
+		api.PUT("/dashboard/notifications/:id/read", dashboardHandler.MarkNotificationAsRead)
 
 		// Статистика отдела (для менеджеров и админов)
 		api.GET("/department-statistics", middleware.ManagerOrAdmin(), statisticsHandler.GetDepartmentStatistics)

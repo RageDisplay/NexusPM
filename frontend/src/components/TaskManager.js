@@ -22,6 +22,12 @@ const TaskManager = () => {
     const [editingTask, setEditingTask] = useState(null);
     const { user } = useAuth();
 
+    // Фильтрация и поиск
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterProject, setFilterProject] = useState('');
+    const [filterStatus, setFilterStatus] = useState(''); // 'active', 'completed'
+    const [sortBy, setSortBy] = useState('date'); // 'date', 'progress', 'hours'
+
     useEffect(() => {
         fetchProjects();
         fetchTasks();
@@ -62,6 +68,42 @@ const TaskManager = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    // Функция для фильтрации и сортировки задач
+    const getFilteredAndSortedTasks = () => {
+        let filtered = tasks;
+
+        // Поиск
+        if (searchQuery) {
+            filtered = filtered.filter(task => 
+                task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                task.description.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+        }
+
+        // Фильтр по проекту
+        if (filterProject) {
+            filtered = filtered.filter(task => task.project_id === parseInt(filterProject));
+        }
+
+        // Фильтр по статусу
+        if (filterStatus === 'active') {
+            filtered = filtered.filter(task => task.progress < 100);
+        } else if (filterStatus === 'completed') {
+            filtered = filtered.filter(task => task.progress === 100);
+        }
+
+        // Сортировка
+        if (sortBy === 'progress') {
+            filtered.sort((a, b) => b.progress - a.progress);
+        } else if (sortBy === 'hours') {
+            filtered.sort((a, b) => b.hours_per_week - a.hours_per_week);
+        } else { // date
+            filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        }
+
+        return filtered;
     };
 
     const handleProjectSelect = (e) => {
@@ -107,6 +149,8 @@ const TaskManager = () => {
         }
     };
 
+    const [localProgress, setLocalProgress] = useState({});
+
     const updateProgress = async (taskId, progress) => {
         try {
             const task = tasks.find(t => t.id === taskId);
@@ -124,6 +168,39 @@ const TaskManager = () => {
         } catch (error) {
             console.error('Ошибка в изменении шкалы прогресса:', error);
             alert('Ошибка в изменении шкалы прогресса: ' + (error.response?.data?.error || error.message));
+        }
+    };
+
+    const handleProgressChange = (taskId, value) => {
+        // Обновляем локальное состояние для визуального обновления
+        setLocalProgress(prev => ({
+            ...prev,
+            [taskId]: parseInt(value)
+        }));
+    };
+
+    const handleProgressCommit = (taskId, value) => {
+        // Отправляем на сервер только при отпускании ползунка
+        updateProgress(taskId, parseInt(value));
+        // Очищаем локальное состояние
+        setLocalProgress(prev => {
+            const updated = { ...prev };
+            delete updated[taskId];
+            return updated;
+        });
+    };
+
+    const duplicateTask = async (task) => {
+        try {
+            setLoading(true);
+            const response = await api.post(`/api/tasks/${task.id}/duplicate`);
+            setTasks(prevTasks => [response.data.task, ...prevTasks]);
+            alert('Задача успешно дублирована!');
+        } catch (error) {
+            console.error('Error duplicating task:', error);
+            alert('Ошибка при дублировании задачи: ' + (error.response?.data?.error || error.message));
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -187,9 +264,17 @@ const TaskManager = () => {
         return task.user_id === user.id;
     };
 
+    const canDuplicateTask = (task) => {
+        if (user.role === 'user') return task.user_id === user.id;
+        if (user.role === 'manager') return task.department === user.department;
+        return true; // админ может дублировать любую задачу
+    };
+
+    const filteredTasks = getFilteredAndSortedTasks();
+
     return (
         <div className="task-manager">
-            <h2>Task Management</h2>
+            <h2>Управление задачами</h2>
             
             <form onSubmit={createTask} className="task-form">
                 <h3>Заполнить отчёт</h3>
@@ -308,188 +393,263 @@ const TaskManager = () => {
             <div className="tasks-list">
                 <h3>Задачи {loading && '(Загрузка...)'}</h3>
                 
-                {tasks.length === 0 && !loading ? (
-                    <p>Задачи не найдены, создайте первую !</p>
+                {/* Фильтры и поиск */}
+                <div className="tasks-controls">
+                    <div className="search-box">
+                        <input
+                            type="text"
+                            placeholder="🔍 Поиск по названию или описанию..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="search-input"
+                        />
+                    </div>
+
+                    <div className="filters-row">
+                        <div className="filter-group">
+                            <label>Проект:</label>
+                            <select
+                                value={filterProject}
+                                onChange={(e) => setFilterProject(e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="">Все проекты</option>
+                                {projects.map(project => (
+                                    <option key={project.id} value={project.id}>
+                                        {project.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="filter-group">
+                            <label>Статус:</label>
+                            <select
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="">Все статусы</option>
+                                <option value="active">Активные</option>
+                                <option value="completed">Завершённые</option>
+                            </select>
+                        </div>
+
+                        <div className="filter-group">
+                            <label>Сортировка:</label>
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="date">По дате (новые первыми)</option>
+                                <option value="progress">По прогрессу (выше первыми)</option>
+                                <option value="hours">По часам (больше первыми)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="results-info">
+                        Найдено задач: <strong>{filteredTasks.length}</strong>
+                    </div>
+                </div>
+                
+                {filteredTasks.length === 0 && !loading ? (
+                    <p className="empty-state">Задачи не найдены{searchQuery ? ' по вашему запросу' : ', создайте первую!'}</p>
                 ) : (
-                    tasks.map(task => (
-                        <div key={task.id} className="task-card">
-                            <div className="task-header">
+                    <div className="tasks-grid">
+                        {filteredTasks.map(task => (
+                            <div key={task.id} className="task-card">
+                                <div className="task-header">
+                                    {editingTask && editingTask.id === task.id ? (
+                                        user.role === 'user' ? (
+                                            <h4>{task.title}</h4>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                value={editingTask.title}
+                                                onChange={(e) => handleEditChange('title', e.target.value)}
+                                                className="edit-input"
+                                            />
+                                        )
+                                    ) : (
+                                        <h4>{task.title}</h4>
+                                    )}
+                                    <div className="task-actions">
+                                        {(user.role === 'admin' || user.role === 'manager') && (
+                                            <span className="task-meta">by {task.username} ({task.department})</span>
+                                        )}
+                                        {canEditTask(task) && (
+                                            <>
+                                                {editingTask && editingTask.id === task.id ? (
+                                                    <>
+                                                        <button 
+                                                            className="btn-save"
+                                                            onClick={() => saveTask(task.id)}
+                                                        >
+                                                            Сохранить
+                                                        </button>
+                                                        <button 
+                                                            className="btn-cancel"
+                                                            onClick={cancelEditing}
+                                                        >
+                                                            Отмена
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button 
+                                                        className="btn-edit"
+                                                        onClick={() => startEditing(task)}
+                                                    >
+                                                        Изменить
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                        {canDuplicateTask(task) && (
+                                            <button 
+                                                className="btn-duplicate"
+                                                onClick={() => duplicateTask(task)}
+                                                disabled={loading}
+                                                title="Дублировать задачу на следующую неделю"
+                                            >
+                                                📋 Дублировать
+                                            </button>
+                                        )}
+                                        {canDeleteTask(task) && (
+                                            <button 
+                                                className="delete-btn"
+                                                onClick={() => deleteTask(task.id)}
+                                                disabled={loading}
+                                            >
+                                                Удалить
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                
                                 {editingTask && editingTask.id === task.id ? (
                                     user.role === 'user' ? (
-                                        <h4>{task.title}</h4>
+                                        <p>{task.description}</p>
                                     ) : (
-                                        <input
-                                            type="text"
-                                            value={editingTask.title}
-                                            onChange={(e) => handleEditChange('title', e.target.value)}
-                                            className="edit-input"
+                                        <textarea
+                                            value={editingTask.description}
+                                            onChange={(e) => handleEditChange('description', e.target.value)}
+                                            className="edit-textarea"
                                         />
                                     )
                                 ) : (
-                                    <h4>{task.title}</h4>
-                                )}
-                                <div className="task-actions">
-                                    {(user.role === 'admin' || user.role === 'manager') && (
-                                        <span className="task-meta">by {task.username} ({task.department})</span>
-                                    )}
-                                    {canEditTask(task) && (
-                                        <>
-                                            {editingTask && editingTask.id === task.id ? (
-                                                <>
-                                                    <button 
-                                                        className="btn-save"
-                                                        onClick={() => saveTask(task.id)}
-                                                    >
-                                                        Сохранить
-                                                    </button>
-                                                    <button 
-                                                        className="btn-cancel"
-                                                        onClick={cancelEditing}
-                                                    >
-                                                        Отмена
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <button 
-                                                    className="btn-edit"
-                                                    onClick={() => startEditing(task)}
-                                                >
-                                                    Изменить
-                                                </button>
-                                            )}
-                                        </>
-                                    )}
-                                    {canDeleteTask(task) && (
-                                        <button 
-                                            className="delete-btn"
-                                            onClick={() => deleteTask(task.id)}
-                                            disabled={loading}
-                                        >
-                                            Удалить
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                            
-                            {editingTask && editingTask.id === task.id ? (
-                                user.role === 'user' ? (
                                     <p>{task.description}</p>
-                                ) : (
-                                    <textarea
-                                        value={editingTask.description}
-                                        onChange={(e) => handleEditChange('description', e.target.value)}
-                                        className="edit-textarea"
+                                )}
+                                
+                                <div className="task-progress">
+                                    <label>Прогресс: {localProgress[task.id] !== undefined ? localProgress[task.id] : task.progress}%</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={localProgress[task.id] !== undefined ? localProgress[task.id] : task.progress}
+                                        onChange={(e) => handleProgressChange(task.id, e.target.value)}
+                                        onMouseUp={(e) => handleProgressCommit(task.id, e.target.value)}
+                                        onTouchEnd={(e) => handleProgressCommit(task.id, e.target.value)}
+                                        disabled={loading}
                                     />
-                                )
-                            ) : (
-                                <p>{task.description}</p>
-                            )}
-                            
-                            <div className="task-progress">
-                                <label>Прогресс: {task.progress}%</label>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={task.progress}
-                                    onChange={(e) => updateProgress(task.id, parseInt(e.target.value))}
-                                    disabled={loading}
-                                />
-                            </div>
-                            
-                            <div className="task-stats">
-                                <div className="stat-item">
-                                    <label>Часов потрачено: </label>
-                                    {editingTask && editingTask.id === task.id ? (
-                                        <input
-                                            type="number"
-                                            step="0.5"
-                                            min="0"
-                                            value={editingTask.hours_per_week}
-                                            onChange={(e) => handleEditChange('hours_per_week', parseFloat(e.target.value) || 0)}
-                                            className="edit-number"
-                                        />
-                                    ) : (
-                                        <span 
-                                            className="editable-field"
-                                            onClick={() => canEditTask(task) && startEditing(task)}
-                                            title={canEditTask(task) ? "Нажмите для редактирования" : ""}
-                                        >
-                                            {task.hours_per_week}
-                                        </span>
-                                    )}
                                 </div>
                                 
-                                <div className="stat-item">
-                                    <label>Нагрузка на месяц: </label>
-                                    {editingTask && editingTask.id === task.id ? (
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={editingTask.load_per_month}
-                                            onChange={(e) => handleEditChange('load_per_month', parseInt(e.target.value) || 0)}
-                                            className="edit-number"
-                                        />
-                                    ) : (
-                                        <span 
-                                            className="editable-field"
-                                            onClick={() => canEditTask(task) && startEditing(task)}
-                                            title={canEditTask(task) ? "Нажмите для редактирования" : ""}
-                                        >
-                                            {task.load_per_month}%
-                                        </span>
-                                    )}
+                                <div className="task-stats">
+                                    <div className="stat-item">
+                                        <label>Часов потрачено: </label>
+                                        {editingTask && editingTask.id === task.id ? (
+                                            <input
+                                                type="number"
+                                                step="0.5"
+                                                min="0"
+                                                value={editingTask.hours_per_week}
+                                                onChange={(e) => handleEditChange('hours_per_week', parseFloat(e.target.value) || 0)}
+                                                className="edit-number"
+                                            />
+                                        ) : (
+                                            <span 
+                                                className="editable-field"
+                                                onClick={() => canEditTask(task) && startEditing(task)}
+                                                title={canEditTask(task) ? "Нажмите для редактирования" : ""}
+                                            >
+                                                {task.hours_per_week}
+                                            </span>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="stat-item">
+                                        <label>Нагрузка на месяц: </label>
+                                        {editingTask && editingTask.id === task.id ? (
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={editingTask.load_per_month}
+                                                onChange={(e) => handleEditChange('load_per_month', parseInt(e.target.value) || 0)}
+                                                className="edit-number"
+                                            />
+                                        ) : (
+                                            <span 
+                                                className="editable-field"
+                                                onClick={() => canEditTask(task) && startEditing(task)}
+                                                title={canEditTask(task) ? "Нажмите для редактирования" : ""}
+                                            >
+                                                {task.load_per_month}%
+                                            </span>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="stat-item">
+                                        <span>Создана: {new Date(task.created_at).toLocaleDateString()}</span>
+                                    </div>
                                 </div>
-                                
-                                <div className="stat-item">
-                                    <span>Создана: {new Date(task.created_at).toLocaleDateString()}</span>
+
+                                <div className="task-report-section">
+                                    <div className="report-item">
+                                        <label>Информация за неделю:</label>
+                                        {editingTask && editingTask.id === task.id ? (
+                                            <textarea
+                                                value={editingTask.weekly_info || ''}
+                                                onChange={(e) => handleEditChange('weekly_info', e.target.value)}
+                                                className="edit-textarea"
+                                            />
+                                        ) : (
+                                            <p className="report-text">{task.weekly_info || 'Нет информации'}</p>
+                                        )}
+                                    </div>
+
+                                    <div className="report-item">
+                                        <label>Планирование:</label>
+                                        {editingTask && editingTask.id === task.id ? (
+                                            <textarea
+                                                value={editingTask.planning || ''}
+                                                onChange={(e) => handleEditChange('planning', e.target.value)}
+                                                className="edit-textarea"
+                                            />
+                                        ) : (
+                                            <p className="report-text">{task.planning || 'Нет информации'}</p>
+                                        )}
+                                    </div>
+
+                                    <div className="report-item">
+                                        <label>Требуется помощь:</label>
+                                        {editingTask && editingTask.id === task.id ? (
+                                            <input
+                                                type="text"
+                                                value={editingTask.help_needed || ''}
+                                                onChange={(e) => handleEditChange('help_needed', e.target.value)}
+                                                className="edit-input"
+                                            />
+                                        ) : (
+                                            <p className="report-text">{task.help_needed || 'Нет'}</p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-
-                            <div className="task-report-section">
-                                <div className="report-item">
-                                    <label>Информация за неделю:</label>
-                                    {editingTask && editingTask.id === task.id ? (
-                                        <textarea
-                                            value={editingTask.weekly_info || ''}
-                                            onChange={(e) => handleEditChange('weekly_info', e.target.value)}
-                                            className="edit-textarea"
-                                        />
-                                    ) : (
-                                        <p className="report-text">{task.weekly_info || 'Нет информации'}</p>
-                                    )}
-                                </div>
-
-                                <div className="report-item">
-                                    <label>Планирование:</label>
-                                    {editingTask && editingTask.id === task.id ? (
-                                        <textarea
-                                            value={editingTask.planning || ''}
-                                            onChange={(e) => handleEditChange('planning', e.target.value)}
-                                            className="edit-textarea"
-                                        />
-                                    ) : (
-                                        <p className="report-text">{task.planning || 'Нет информации'}</p>
-                                    )}
-                                </div>
-
-                                <div className="report-item">
-                                    <label>Требуется помощь:</label>
-                                    {editingTask && editingTask.id === task.id ? (
-                                        <input
-                                            type="text"
-                                            value={editingTask.help_needed || ''}
-                                            onChange={(e) => handleEditChange('help_needed', e.target.value)}
-                                            className="edit-input"
-                                        />
-                                    ) : (
-                                        <p className="report-text">{task.help_needed || 'Нет'}</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ))
+                        ))}
+                    </div>
                 )}
             </div>
         </div>

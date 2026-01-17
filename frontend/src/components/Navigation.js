@@ -19,7 +19,7 @@ const Navigation = () => {
           style={{ textDecoration: 'none', color: 'inherit' }}
         >
           <div className="nav-brand">
-            Solar Tasks (DEMO)
+            Solar Tasks
           </div>
         </Link>
         <div className="nav-links">

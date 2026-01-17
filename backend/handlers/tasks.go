@@ -146,6 +146,16 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	id, _ := result.LastInsertId()
 	task.ID = int(id)
 	task.UserID = assignToUserID
+
+	// Log activity
+	LogActivity(h.db, userID, "task_created", "Создана задача: "+task.Title, &task.ID, &task.ProjectID)
+
+	// Create notification for the assigned user
+	if assignToUserID != userID {
+		// Если задача назначена другому пользователю
+		CreateNotification(h.db, assignToUserID, "task_assigned", "Вам назначена новая задача", "Новая задача: "+task.Title, &task.ID)
+	}
+
 	c.JSON(http.StatusCreated, task)
 }
 
@@ -225,6 +235,9 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		return
 	}
 
+	// Log activity
+	LogActivity(h.db, userID, "task_updated", "Обновлена задача: "+task.Title, &taskID, &task.ProjectID)
+
 	c.JSON(http.StatusOK, gin.H{"message": "Задача успешно обновлена"})
 }
 
@@ -260,4 +273,100 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Задача успешно удалена"})
+}
+func (h *TaskHandler) DuplicateTask(c *gin.Context) {
+	taskID, _ := strconv.Atoi(c.Param("id"))
+	userID := c.GetInt("userID")
+	userRole := c.GetString("userRole")
+
+	// Получаем исходную задачу
+	var task models.Task
+	var projectID sql.NullInt64
+	var department sql.NullString
+
+	err := h.db.QueryRow(`
+		SELECT id, title, description, progress, hours_per_week, load_per_month, 
+		       weekly_info, planning, help_needed, user_id, project_id, created_at
+		FROM tasks
+		WHERE id = ?
+	`, taskID).Scan(&task.ID, &task.Title, &task.Description, &task.Progress,
+		&task.HoursPerWeek, &task.LoadPerMonth, &task.WeeklyInfo, &task.Planning,
+		&task.HelpNeeded, &task.UserID, &projectID, &task.CreatedAt)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Задача не найдена"})
+		return
+	}
+
+	// Проверка прав доступа (может дублировать только свои задачи)
+	if userRole == "user" && task.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете дублировать только свои задачи"})
+		return
+	}
+
+	// Создаем дублированную задачу
+	newTask := models.Task{
+		Title:        task.Title,
+		Description:  task.Description,
+		Progress:     0, // Новая задача начинается с 0%
+		HoursPerWeek: task.HoursPerWeek,
+		LoadPerMonth: task.LoadPerMonth,
+		WeeklyInfo:   task.WeeklyInfo,
+		Planning:     task.Planning,
+		HelpNeeded:   task.HelpNeeded,
+		UserID:       task.UserID,
+		ProjectID:    task.ProjectID,
+	}
+
+	if projectID.Valid {
+		newTask.ProjectID = int(projectID.Int64)
+	}
+
+	result, err := h.db.Exec(`
+		INSERT INTO tasks (title, description, progress, hours_per_week, load_per_month, weekly_info, planning, help_needed, user_id, project_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, newTask.Title, newTask.Description, newTask.Progress, newTask.HoursPerWeek, newTask.LoadPerMonth,
+		newTask.WeeklyInfo, newTask.Planning, newTask.HelpNeeded, newTask.UserID,
+		sql.NullInt64{Int64: int64(newTask.ProjectID), Valid: newTask.ProjectID > 0})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	newID, _ := result.LastInsertId()
+	newTask.ID = int(newID)
+
+	// Получаем полную информацию о задаче с username
+	err = h.db.QueryRow(`
+		SELECT t.id, t.title, t.description, t.progress, t.hours_per_week, t.load_per_month, 
+		       t.weekly_info, t.planning, t.help_needed, t.user_id, t.project_id, 
+		       t.created_at, t.updated_at, u.username, u.department, COALESCE(p.name, '') as project_name
+		FROM tasks t 
+		JOIN users u ON t.user_id = u.id 
+		LEFT JOIN projects p ON t.project_id = p.id
+		WHERE t.id = ?
+	`, newID).Scan(&newTask.ID, &newTask.Title, &newTask.Description, &newTask.Progress,
+		&newTask.HoursPerWeek, &newTask.LoadPerMonth, &newTask.WeeklyInfo, &newTask.Planning,
+		&newTask.HelpNeeded, &newTask.UserID, &projectID, &newTask.CreatedAt, &newTask.UpdatedAt,
+		&newTask.Username, &department, &newTask.ProjectName)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить данные дублированной задачи"})
+		return
+	}
+
+	// Log activity
+	duplicateTaskID := int(newID)
+	LogActivity(h.db, userID, "task_created", "Дублирована задача: "+newTask.Title, &duplicateTaskID, &newTask.ProjectID)
+
+	// Create notification for the assigned user
+	if newTask.UserID != userID {
+		CreateNotification(h.db, newTask.UserID, "task_assigned", "Вам назначена новая задача", "Новая задача: "+newTask.Title, &duplicateTaskID)
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Задача успешно дублирована",
+		"task":    newTask,
+	})
 }

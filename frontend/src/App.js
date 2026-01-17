@@ -10,6 +10,9 @@ import Reports from './components/Reports';
 import Navigation from './components/Navigation';
 import BackupManager from './components/BackupManager';
 import ADConfigPanel from './components/ADConfigPanel';
+import UserProfile from './components/UserProfile';
+import ActivityHistory from './components/ActivityHistory';
+import Notifications from './components/Notifications';
 import './App.css';
 
 function ProtectedRoute({ children, requiredRole }) {
