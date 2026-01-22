@@ -31,6 +31,9 @@ type ADConfig struct {
 	EmailAttr       string    `json:"email_attr"`        // Атрибут для email
 	GroupSearchBase string    `json:"group_search_base"` // OU для поиска групп
 	SyncInterval    int       `json:"sync_interval"`     // Интервал синхронизации в минутах
+	TLSEnabled      bool      `json:"tls_enabled"`       // Использовать TLS/LDAPS
+	CertificatePath string    `json:"certificate_path"`  // Путь к сертификату CA
+	SkipCertVerify  bool      `json:"skip_cert_verify"`  // Пропустить проверку сертификата (небезопасно)
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }

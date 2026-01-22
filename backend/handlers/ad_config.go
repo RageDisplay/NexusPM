@@ -77,6 +77,9 @@ func (h *ADConfigHandler) SetupADConfig(c *gin.Context) {
 		EmailAttr       string `json:"email_attr"`
 		GroupSearchBase string `json:"group_search_base"`
 		SyncInterval    int    `json:"sync_interval"`
+		TLSEnabled      bool   `json:"tls_enabled"`
+		CertificatePath string `json:"certificate_path"`
+		SkipCertVerify  bool   `json:"skip_cert_verify"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -120,6 +123,9 @@ func (h *ADConfigHandler) SetupADConfig(c *gin.Context) {
 		EmailAttr:       req.EmailAttr,
 		GroupSearchBase: req.GroupSearchBase,
 		SyncInterval:    req.SyncInterval,
+		TLSEnabled:      req.TLSEnabled,
+		CertificatePath: req.CertificatePath,
+		SkipCertVerify:  req.SkipCertVerify,
 	}
 
 	if config.SyncInterval == 0 {

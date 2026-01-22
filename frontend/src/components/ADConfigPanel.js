@@ -21,7 +21,10 @@ const ADConfigPanel = () => {
     department_attr: 'department',
     email_attr: 'mail',
     group_search_base: '',
-    sync_interval: 60
+    sync_interval: 60,
+    tls_enabled: false,
+    certificate_path: '',
+    skip_cert_verify: false
   });
 
   useEffect(() => {
@@ -46,7 +49,10 @@ const ADConfigPanel = () => {
           department_attr: response.data.config.department_attr,
           email_attr: response.data.config.email_attr,
           group_search_base: response.data.config.group_search_base,
-          sync_interval: parseInt(response.data.config.sync_interval, 10)
+          sync_interval: parseInt(response.data.config.sync_interval, 10),
+          tls_enabled: response.data.config.tls_enabled || false,
+          certificate_path: response.data.config.certificate_path || '',
+          skip_cert_verify: response.data.config.skip_cert_verify || false
         });
       }
     } catch (error) {
@@ -219,6 +225,49 @@ const ADConfigPanel = () => {
               />
               <small>Пример: ldap://dc.example.com:389 или ldaps://dc.example.com:636</small>
             </div>
+
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  name="tls_enabled"
+                  checked={formData.tls_enabled}
+                  onChange={handleInputChange}
+                  disabled={isLoading || !formData.enabled}
+                />
+                <span>Использовать TLS/LDAPS (порт обычно 636)</span>
+              </label>
+            </div>
+
+            {formData.tls_enabled && (
+              <>
+                <div className="form-group">
+                  <label>Путь к сертификату CA (опционально):</label>
+                  <input
+                    type="text"
+                    name="certificate_path"
+                    placeholder="/path/to/ca-cert.pem"
+                    value={formData.certificate_path}
+                    onChange={handleInputChange}
+                    disabled={isLoading || !formData.enabled}
+                  />
+                  <small>Укажите путь к сертификату CA на сервере (например, /etc/ssl/certs/ca-bundle.crt)</small>
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="skip_cert_verify"
+                      checked={formData.skip_cert_verify}
+                      onChange={handleInputChange}
+                      disabled={isLoading || !formData.enabled}
+                    />
+                    <span>⚠️ Пропустить проверку сертификата (небезопасно, только для тестирования)</span>
+                  </label>
+                </div>
+              </>
+            )}
 
             <div className="form-group">
               <label>Base DN:</label>

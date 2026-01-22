@@ -1,6 +1,7 @@
 package ldap
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"log"
@@ -33,7 +34,8 @@ func (lm *LDAPManager) GetADConfig() (*models.ADConfig, error) {
 	err := lm.db.QueryRow(`
 		SELECT id, enabled, directory_type, server_url, base_dn, bind_dn, 
 		       bind_password, user_search_base, user_name_attr, department_attr, 
-		       email_attr, group_search_base, sync_interval, created_at, updated_at
+		       email_attr, group_search_base, sync_interval, tls_enabled, 
+		       certificate_path, skip_cert_verify, created_at, updated_at
 		FROM ad_config
 		ORDER BY id DESC
 		LIMIT 1
@@ -41,7 +43,8 @@ func (lm *LDAPManager) GetADConfig() (*models.ADConfig, error) {
 		&config.ID, &config.Enabled, &config.DirectoryType, &config.ServerURL,
 		&config.BaseDN, &config.BindDN, &config.BindPassword, &config.UserSearchBase,
 		&config.UserNameAttr, &config.DepartmentAttr, &config.EmailAttr,
-		&config.GroupSearchBase, &config.SyncInterval, &config.CreatedAt, &config.UpdatedAt,
+		&config.GroupSearchBase, &config.SyncInterval, &config.TLSEnabled,
+		&config.CertificatePath, &config.SkipCertVerify, &config.CreatedAt, &config.UpdatedAt,
 	)
 
 	if err != nil {
@@ -60,13 +63,15 @@ func (lm *LDAPManager) SaveADConfig(config *models.ADConfig) error {
 		INSERT INTO ad_config (
 			enabled, directory_type, server_url, base_dn, bind_dn, bind_password,
 			user_search_base, user_name_attr, department_attr, email_attr,
-			group_search_base, sync_interval, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			group_search_base, sync_interval, tls_enabled, certificate_path, 
+			skip_cert_verify, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		config.Enabled, config.DirectoryType, config.ServerURL, config.BaseDN,
 		config.BindDN, config.BindPassword, config.UserSearchBase, config.UserNameAttr,
 		config.DepartmentAttr, config.EmailAttr, config.GroupSearchBase,
-		config.SyncInterval, time.Now(), time.Now(),
+		config.SyncInterval, config.TLSEnabled, config.CertificatePath,
+		config.SkipCertVerify, time.Now(), time.Now(),
 	)
 
 	if err != nil {
@@ -89,16 +94,50 @@ func (lm *LDAPManager) UpdateADConfig(config *models.ADConfig) error {
 		SET enabled = ?, directory_type = ?, server_url = ?, base_dn = ?,
 		    bind_dn = ?, bind_password = ?, user_search_base = ?,
 		    user_name_attr = ?, department_attr = ?, email_attr = ?,
-		    group_search_base = ?, sync_interval = ?, updated_at = ?
+		    group_search_base = ?, sync_interval = ?, tls_enabled = ?,
+		    certificate_path = ?, skip_cert_verify = ?, updated_at = ?
 		WHERE id = ?
 	`,
 		config.Enabled, config.DirectoryType, config.ServerURL, config.BaseDN,
 		config.BindDN, config.BindPassword, config.UserSearchBase,
 		config.UserNameAttr, config.DepartmentAttr, config.EmailAttr,
-		config.GroupSearchBase, config.SyncInterval, time.Now(), config.ID,
+		config.GroupSearchBase, config.SyncInterval, config.TLSEnabled,
+		config.CertificatePath, config.SkipCertVerify, time.Now(), config.ID,
 	)
 
 	return err
+}
+
+// dialLDAP создаёт подключение к LDAP серверу с поддержкой TLS
+func (lm *LDAPManager) dialLDAP(config *models.ADConfig) (*ldap.Conn, error) {
+	var conn *ldap.Conn
+	var err error
+
+	if config.TLSEnabled {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: config.SkipCertVerify,
+		}
+
+		// Если указан сертификат и не пропускаем проверку - загружаем его
+		if config.CertificatePath != "" && !config.SkipCertVerify {
+			caCert, err := tls.LoadX509KeyPair(config.CertificatePath, config.CertificatePath)
+			if err != nil {
+				log.Printf("Warning: could not load certificate from %s: %v, will use InsecureSkipVerify\n", config.CertificatePath, err)
+			} else {
+				tlsConfig.Certificates = []tls.Certificate{caCert}
+			}
+		}
+
+		conn, err = ldap.DialURL(config.ServerURL, ldap.DialWithTLSConfig(tlsConfig))
+	} else {
+		conn, err = ldap.DialURL(config.ServerURL)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to LDAP server: %v", err)
+	}
+
+	return conn, nil
 }
 
 // AuthenticateADUser аутентифицирует пользователя в LDAP/AD
@@ -109,9 +148,9 @@ func (lm *LDAPManager) AuthenticateADUser(username, password string) (*LDAPUserI
 	}
 
 	// Подключаемся к LDAP серверу
-	conn, err := ldap.DialURL(config.ServerURL)
+	conn, err := lm.dialLDAP(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to LDAP server: %v", err)
+		return nil, err
 	}
 	defer conn.Close()
 
@@ -153,9 +192,9 @@ func (lm *LDAPManager) AuthenticateADUser(username, password string) (*LDAPUserI
 
 	// Закрываем старое соединение и подключаемся с учётными данными пользователя
 	conn.Close()
-	conn, err = ldap.DialURL(config.ServerURL)
+	conn, err = lm.dialLDAP(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to reconnect to LDAP server: %v", err)
+		return nil, err
 	}
 	defer conn.Close()
 
@@ -191,9 +230,9 @@ func (lm *LDAPManager) SyncADUsers() (int, error) {
 		return 0, fmt.Errorf("AD is not configured")
 	}
 
-	conn, err := ldap.DialURL(config.ServerURL)
+	conn, err := lm.dialLDAP(config)
 	if err != nil {
-		return 0, fmt.Errorf("failed to connect to LDAP server: %v", err)
+		return 0, err
 	}
 	defer conn.Close()
 

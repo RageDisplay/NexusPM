@@ -279,19 +279,21 @@ func (h *TaskHandler) DuplicateTask(c *gin.Context) {
 	userID := c.GetInt("userID")
 	userRole := c.GetString("userRole")
 
-	// Получаем исходную задачу
+	// Получаем исходную задачу с информацией о пользователе
 	var task models.Task
 	var projectID sql.NullInt64
 	var department sql.NullString
 
 	err := h.db.QueryRow(`
-		SELECT id, title, description, progress, hours_per_week, load_per_month, 
-		       weekly_info, planning, help_needed, user_id, project_id, created_at
-		FROM tasks
-		WHERE id = ?
+		SELECT t.id, t.title, t.description, t.progress, t.hours_per_week, t.load_per_month, 
+		       t.weekly_info, t.planning, t.help_needed, t.user_id, t.project_id, t.created_at,
+		       u.department
+		FROM tasks t
+		JOIN users u ON t.user_id = u.id
+		WHERE t.id = ?
 	`, taskID).Scan(&task.ID, &task.Title, &task.Description, &task.Progress,
 		&task.HoursPerWeek, &task.LoadPerMonth, &task.WeeklyInfo, &task.Planning,
-		&task.HelpNeeded, &task.UserID, &projectID, &task.CreatedAt)
+		&task.HelpNeeded, &task.UserID, &projectID, &task.CreatedAt, &department)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Задача не найдена"})
@@ -354,6 +356,10 @@ func (h *TaskHandler) DuplicateTask(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось получить данные дублированной задачи"})
 		return
+	}
+
+	if department.Valid {
+		newTask.Department = department.String
 	}
 
 	// Log activity

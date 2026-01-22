@@ -265,9 +265,9 @@ const TaskManager = () => {
     };
 
     const canDuplicateTask = (task) => {
-        if (user.role === 'user') return task.user_id === user.id;
+        if (user.role === 'admin') return true;
         if (user.role === 'manager') return task.department === user.department;
-        return true; // админ может дублировать любую задачу
+        return task.user_id === user.id;
     };
 
     const filteredTasks = getFilteredAndSortedTasks();
@@ -279,7 +279,7 @@ const TaskManager = () => {
             <form onSubmit={createTask} className="task-form">
                 <h3>Заполнить отчёт</h3>
                 
-                <div className="form-group">
+                <div className="form-group form-col-1">
                     <label>Проект (Название)</label>
                     <select
                         value={newTask.project_id || ''}
@@ -297,7 +297,7 @@ const TaskManager = () => {
                 </div>
 
                 {user?.role === 'manager' && (
-                    <div className="form-group">
+                    <div className="form-group form-col-2">
                         <label>Назначить сотруднику</label>
                         <select
                             value={newTask.user_id || ''}
@@ -314,13 +314,31 @@ const TaskManager = () => {
                     </div>
                 )}
 
-                {newTask.description && (
-                    <div className="project-description-box">
-                        <strong>Описание задачи:</strong>
-                        <p>{newTask.description}</p>
-                    </div>
-                )}
-                <div className="form-group">
+                <div className="project-description-box" style={{opacity: newTask.description ? 1 : 0.3}}>
+                    <strong>Описание задачи:</strong>
+                    <p>{newTask.description || 'Выберите проект для отображения описания'}</p>
+                </div>
+
+                <div className="form-group form-col-1">
+                    <label>Информация за неделю</label>
+                    <textarea
+                        placeholder="Что было сделано за неделю"
+                        value={newTask.weekly_info}
+                        onChange={(e) => setNewTask({...newTask, weekly_info: e.target.value})}
+                        disabled={loading}
+                    />
+                </div>
+
+                <div className="form-group form-col-1">
+                    <textarea
+                        placeholder="Что планируется на следующую неделю"
+                        value={newTask.planning}
+                        onChange={(e) => setNewTask({...newTask, planning: e.target.value})}
+                        disabled={loading}
+                    />
+                </div>
+
+                <div className="form-group progress-group">
                     <label>Прогресс: {newTask.progress}%</label>
                     <input
                         type="range"
@@ -331,60 +349,42 @@ const TaskManager = () => {
                         disabled={loading}
                     />
                 </div>
-                <div className="form-row">
-                    <div className="form-group">
-                        <label>Часов потрачено</label>
-                        <input
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            value={newTask.hours_per_week}
-                            onChange={(e) => setNewTask({...newTask, hours_per_week: parseFloat(e.target.value) || 0})}
-                            disabled={loading}
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label>Загрузка с задачи на месяц (%)</label>
-                        <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={newTask.load_per_month}
-                            onChange={(e) => setNewTask({...newTask, load_per_month: parseInt(e.target.value) || 0})}
-                            disabled={loading}
-                        />
-                    </div>
+
+                <div className="form-group form-col-1">
+                    <label>Часов потрачено</label>
+                    <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={newTask.hours_per_week}
+                        onChange={(e) => setNewTask({...newTask, hours_per_week: parseFloat(e.target.value) || 0})}
+                        disabled={loading}
+                    />
                 </div>
-                <div className="form-row">
-                    <div className="form-group">
-                        <label>Информация за неделю</label>
-                        <textarea
-                            placeholder="Что было сделано за неделю"
-                            value={newTask.weekly_info}
-                            onChange={(e) => setNewTask({...newTask, weekly_info: e.target.value})}
-                            disabled={loading}
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label>Планирование</label>
-                        <textarea
-                            placeholder="Что планируется на следующую неделю"
-                            value={newTask.planning}
-                            onChange={(e) => setNewTask({...newTask, planning: e.target.value})}
-                            disabled={loading}
-                        />
-                    </div>
+
+                <div className="form-group form-col-2">
+                    <label>Загрузка с задачи на месяц (%)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={newTask.load_per_month}
+                        onChange={(e) => setNewTask({...newTask, load_per_month: parseInt(e.target.value) || 0})}
+                        disabled={loading}
+                    />
                 </div>
-                <div className="form-group">
+
+                <div className="form-group form-col-3">
                     <label>Требуется помощь</label>
                     <input
                         type="text"
-                        placeholder="Укажите помощь, если требуется (оставьте пустым, если нет)"
+                        placeholder="Укажите помощь, если требуется"
                         value={newTask.help_needed}
                         onChange={(e) => setNewTask({...newTask, help_needed: e.target.value})}
                         disabled={loading}
                     />
                 </div>
+
                 <button type="submit" className="btn btn-primary" disabled={loading}>
                     {loading ? 'Создание...' : 'Создать'}
                 </button>
@@ -513,7 +513,7 @@ const TaskManager = () => {
                                                 disabled={loading}
                                                 title="Дублировать задачу на следующую неделю"
                                             >
-                                                📋 Дублировать
+                                                Дублировать
                                             </button>
                                         )}
                                         {canDeleteTask(task) && (

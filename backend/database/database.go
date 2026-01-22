@@ -56,6 +56,9 @@ func InitDB() (*sql.DB, error) {
         email_attr VARCHAR(100),
         group_search_base VARCHAR(255),
         sync_interval INTEGER DEFAULT 60,
+        tls_enabled BOOLEAN DEFAULT 0,
+        certificate_path VARCHAR(500),
+        skip_cert_verify BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );`
