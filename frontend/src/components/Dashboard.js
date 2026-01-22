@@ -148,7 +148,7 @@ const Dashboard = () => {
             {statistics && (
               <>
                 <div className="dashboard-card">
-                  <h3>Мои задачи</h3>
+                  <h3>Мои задачи <span className="info-badge">за 7 дней</span></h3>
                   <div className="card-content">
                     <div className="stat-row">
                       <span>Всего задач:</span>
@@ -170,7 +170,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="dashboard-card">
-                  <h3>Загруженность</h3>
+                  <h3>Загруженность <span className="info-badge">за 7 дней</span></h3>
                   <div className="card-content">
                     <div className="stat-row">
                       <span>Часов в неделю:</span>

@@ -20,10 +20,25 @@ func NewReportHandler(db *sql.DB) *ReportHandler {
 func (h *ReportHandler) ExportMyTasks(c *gin.Context) {
 	userID := c.GetInt("userID")
 
-	rows, err := h.db.Query(`
+	// Получаем параметры дат
+	startDateStr := c.Query("start_date")
+	endDateStr := c.Query("end_date")
+
+	query := `
         SELECT title, progress, hours_per_week, load_per_month, weekly_info, planning, help_needed, created_at
-        FROM tasks WHERE user_id = ?
-    `, userID)
+        FROM tasks WHERE user_id = ?`
+
+	args := []interface{}{userID}
+
+	// Добавляем фильтр по датам если указаны
+	if startDateStr != "" && endDateStr != "" {
+		query += ` AND created_at >= ? AND created_at <= ?`
+		args = append(args, startDateStr+" 00:00:00", endDateStr+" 23:59:59")
+	}
+
+	query += ` ORDER BY created_at DESC`
+
+	rows, err := h.db.Query(query, args...)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -71,12 +86,27 @@ func (h *ReportHandler) ExportMyTasks(c *gin.Context) {
 func (h *ReportHandler) ExportDepartmentTasks(c *gin.Context) {
 	userDepartment := c.GetString("userDepartment")
 
-	rows, err := h.db.Query(`
+	// Получаем параметры дат
+	startDateStr := c.Query("start_date")
+	endDateStr := c.Query("end_date")
+
+	query := `
         SELECT ROW_NUMBER() OVER (ORDER BY t.created_at) as row_num, u.username, t.title, t.weekly_info, t.planning, t.help_needed, t.hours_per_week, t.load_per_month
         FROM tasks t 
         JOIN users u ON t.user_id = u.id 
-        WHERE u.department = ?
-        ORDER BY t.created_at DESC`, userDepartment)
+        WHERE u.department = ?`
+
+	args := []interface{}{userDepartment}
+
+	// Добавляем фильтр по датам если указаны
+	if startDateStr != "" && endDateStr != "" {
+		query += ` AND t.created_at >= ? AND t.created_at <= ?`
+		args = append(args, startDateStr+" 00:00:00", endDateStr+" 23:59:59")
+	}
+
+	query += ` ORDER BY t.created_at DESC`
+
+	rows, err := h.db.Query(query, args...)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -121,11 +151,26 @@ func (h *ReportHandler) ExportDepartmentTasks(c *gin.Context) {
 }
 
 func (h *ReportHandler) ExportAllTasks(c *gin.Context) {
-	rows, err := h.db.Query(`
+	// Получаем параметры дат
+	startDateStr := c.Query("start_date")
+	endDateStr := c.Query("end_date")
+
+	query := `
         SELECT ROW_NUMBER() OVER (ORDER BY t.created_at) as row_num, u.username, t.title, t.weekly_info, t.planning, t.help_needed, t.hours_per_week, t.load_per_month
         FROM tasks t 
-        JOIN users u ON t.user_id = u.id
-        ORDER BY t.created_at DESC`)
+        JOIN users u ON t.user_id = u.id`
+
+	args := []interface{}{}
+
+	// Добавляем фильтр по датам если указаны
+	if startDateStr != "" && endDateStr != "" {
+		query += ` WHERE t.created_at >= ? AND t.created_at <= ?`
+		args = append(args, startDateStr+" 00:00:00", endDateStr+" 23:59:59")
+	}
+
+	query += ` ORDER BY t.created_at DESC`
+
+	rows, err := h.db.Query(query, args...)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

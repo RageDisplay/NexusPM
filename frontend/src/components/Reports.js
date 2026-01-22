@@ -4,10 +4,34 @@ import { useAuth } from '../contexts/AuthContext';
 
 const Reports = () => {
     const { user } = useAuth();
+    const [startDate, setStartDate] = React.useState('');
+    const [endDate, setEndDate] = React.useState('');
+
+    React.useEffect(() => {
+        // Устанавливаем начало недели (понедельник) и конец (воскресенье)
+        const today = new Date();
+        const dayOfWeek = today.getDay();
+        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        
+        const monday = new Date(today.setDate(diff));
+        const sunday = new Date(monday);
+        sunday.setDate(sunday.getDate() + 6);
+        
+        const formatDate = (date) => date.toISOString().split('T')[0];
+        setStartDate(formatDate(monday));
+        setEndDate(formatDate(sunday));
+    }, []);
 
     const downloadReport = async (type) => {
         try {
+            const params = {};
+            if (startDate && endDate) {
+                params.start_date = startDate;
+                params.end_date = endDate;
+            }
+            
             const response = await api.get(`/api/reports/${type}`, { 
+                params,
                 responseType: 'blob'
             });
 
@@ -44,6 +68,30 @@ const Reports = () => {
     <div className="reports-section">
       <h2>Отчёты</h2>
       <p>Скачать отчёты в формате excel.</p>
+      
+      <div className="report-date-range">
+        <h3>Фильтр по датам:</h3>
+        <div>
+          <div>
+            <label htmlFor="report-start-date">С:</label>
+            <input
+              id="report-start-date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="report-end-date">По:</label>
+            <input
+              id="report-end-date"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
       
       <div className="report-options">
         <button 

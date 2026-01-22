@@ -105,6 +105,7 @@ func main() {
 		api.GET("/dashboard/activity", dashboardHandler.GetActivityLog)
 		api.GET("/dashboard/notifications", dashboardHandler.GetNotifications)
 		api.PUT("/dashboard/notifications/:id/read", dashboardHandler.MarkNotificationAsRead)
+		api.DELETE("/dashboard/notifications/clear", dashboardHandler.ClearNotifications)
 
 		// Статистика отдела (для менеджеров и админов)
 		api.GET("/department-statistics", middleware.ManagerOrAdmin(), statisticsHandler.GetDepartmentStatistics)

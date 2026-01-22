@@ -38,8 +38,29 @@ func (h *StatisticsHandler) GetDepartmentStatistics(c *gin.Context) {
 		return
 	}
 
-	var rows *sql.Rows
+	// Получаем параметры дат
+	startDateStr := c.Query("start_date")
+	endDateStr := c.Query("end_date")
+
+	var startDate, endDate time.Time
 	var err error
+
+	if startDateStr != "" && endDateStr != "" {
+		startDate, err = time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start_date format"})
+			return
+		}
+		endDate, err = time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end_date format"})
+			return
+		}
+		// Устанавливаем конец дня для end_date
+		endDate = endDate.Add(time.Hour * 23).Add(time.Minute * 59).Add(time.Second * 59)
+	}
+
+	var rows *sql.Rows
 
 	if userRole == "admin" {
 		// Админ видит всех пользователей
@@ -85,14 +106,22 @@ func (h *StatisticsHandler) GetDepartmentStatistics(c *gin.Context) {
 		var totalLoadPerMonth sql.NullInt64
 		var totalHoursPerWeek sql.NullFloat64
 
-		err = h.db.QueryRow(`
+		query := `
 			SELECT 
 				COUNT(*),
 				COALESCE(SUM(load_per_month), 0),
 				COALESCE(SUM(hours_per_week), 0)
 			FROM tasks
-			WHERE user_id = ?
-		`, emp.ID).Scan(&taskCount, &totalLoadPerMonth, &totalHoursPerWeek)
+			WHERE user_id = ?`
+
+		args := []interface{}{emp.ID}
+
+		if !startDate.IsZero() && !endDate.IsZero() {
+			query += ` AND created_at >= ? AND created_at <= ?`
+			args = append(args, startDate, endDate)
+		}
+
+		err = h.db.QueryRow(query, args...).Scan(&taskCount, &totalLoadPerMonth, &totalHoursPerWeek)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

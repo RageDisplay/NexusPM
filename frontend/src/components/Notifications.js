@@ -38,6 +38,24 @@ const Notifications = () => {
         }
     };
 
+    const handleClearNotifications = async () => {
+        if (!window.confirm('Вы уверены? Все уведомления будут удалены. Это невозможно отменить!')) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await api.delete('/api/dashboard/notifications/clear');
+            setNotifications([]);
+            setUnreadCount(0);
+        } catch (error) {
+            console.error('Error clearing notifications:', error);
+            alert('Ошибка при очистке уведомлений: ' + (error.response?.data?.error || error.message));
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const getNotificationIcon = (notificationType) => {
         switch (notificationType) {
             case 'project_assigned':
@@ -73,9 +91,21 @@ const Notifications = () => {
         <div className="notifications-panel">
             <div className="notifications-header">
                 <h3>Уведомления</h3>
-                {unreadCount > 0 && (
-                    <span className="unread-badge">{unreadCount}</span>
-                )}
+                <div className="header-controls">
+                    {unreadCount > 0 && (
+                        <span className="unread-badge">{unreadCount}</span>
+                    )}
+                    {notifications.length > 0 && (
+                        <button 
+                            className="btn-clear-notifications"
+                            onClick={handleClearNotifications}
+                            disabled={loading}
+                            title="Очистить все уведомления"
+                        >
+                            🗑️
+                        </button>
+                    )}
+                </div>
             </div>
 
             {loading && notifications.length === 0 && (

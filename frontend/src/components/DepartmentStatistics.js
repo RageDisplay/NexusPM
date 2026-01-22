@@ -8,17 +8,41 @@ const DepartmentStatistics = () => {
     const [loading, setLoading] = useState(false);
     const [clearing, setClearing] = useState(false);
     const [message, setMessage] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
     useEffect(() => {
         if (user?.role === 'manager' || user?.role === 'admin') {
-            fetchStatistics();
+            // Устанавливаем начало недели (понедельник) и конец (воскресенье)
+            const today = new Date();
+            const dayOfWeek = today.getDay();
+            const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+            
+            const monday = new Date(today.setDate(diff));
+            const sunday = new Date(monday);
+            sunday.setDate(sunday.getDate() + 6);
+            
+            const formatDate = (date) => date.toISOString().split('T')[0];
+            setStartDate(formatDate(monday));
+            setEndDate(formatDate(sunday));
         }
     }, [user]);
+
+    useEffect(() => {
+        if (startDate && endDate) {
+            fetchStatistics();
+        }
+    }, [startDate, endDate]);
 
     const fetchStatistics = async () => {
         try {
             setLoading(true);
-            const response = await api.get('/api/department-statistics');
+            const response = await api.get('/api/department-statistics', {
+                params: {
+                    start_date: startDate,
+                    end_date: endDate
+                }
+            });
             setStatistics(response.data || []);
             setMessage('');
         } catch (error) {
@@ -97,6 +121,28 @@ const DepartmentStatistics = () => {
         <div className="department-statistics">
             <div className="statistics-header">
                 <h2>Статистика отдела: {user?.department}</h2>
+                
+                <div className="date-range-selector">
+                    <div className="date-input-group">
+                        <label htmlFor="start-date">С:</label>
+                        <input
+                            id="start-date"
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                        />
+                    </div>
+                    <div className="date-input-group">
+                        <label htmlFor="end-date">По:</label>
+                        <input
+                            id="end-date"
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                        />
+                    </div>
+                </div>
+                
                 <div className="header-buttons">
                     <button 
                         onClick={fetchStatistics} 

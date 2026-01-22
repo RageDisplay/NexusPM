@@ -806,6 +806,24 @@ body {
   font-size: 0.95rem;
   text-transform: uppercase;
   letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.dashboard-card h3 .info-badge {
+  display: inline-block;
+  background: rgba(0, 212, 170, 0.2);
+  color: var(--primary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0;
+  margin-left: auto;
+  margin-right: 0;
 }
 
 .dashboard-card .number {
@@ -833,6 +851,70 @@ body {
   gap: 15px;
   margin: 20px 0;
   flex-wrap: wrap;
+}
+
+.report-date-range {
+  background: linear-gradient(135deg, rgba(255, 159, 67, 0.1) 0%, rgba(0, 212, 170, 0.05) 100%);
+  border: 1px solid rgba(255, 159, 67, 0.2);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.report-date-range h3 {
+  margin: 0 0 15px 0;
+  color: var(--primary);
+  font-size: 16px;
+}
+
+.report-date-range > div {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.report-date-range div div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.report-date-range label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.report-date-range input[type="date"] {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 150px;
+}
+
+.report-date-range input[type="date"]:hover {
+  border-color: var(--primary);
+  background-color: rgba(0, 212, 170, 0.05);
+}
+
+.report-date-range input[type="date"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  background-color: rgba(0, 212, 170, 0.05);
+  box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+}
+
+.report-date-range input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) brightness(1.2);
+  cursor: pointer;
 }
 
 /* User Management */
@@ -2450,6 +2532,47 @@ code, .badge-green { color: #ffd7b3; }
   background-clip: text;
 }
 
+.date-range-selector {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.date-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.date-input-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.date-input-group input[type="date"] {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.date-input-group input[type="date"]:hover {
+  border-color: var(--primary);
+  background-color: rgba(0, 212, 170, 0.05);
+}
+
+.date-input-group input[type="date"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  background-color: rgba(0, 212, 170, 0.05);
+  box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+}
+
 .header-buttons {
   display: flex;
   gap: 10px;
@@ -3005,11 +3128,40 @@ code, .badge-green { color: #ffd7b3; }
   align-items: center;
   gap: 10px;
   margin-bottom: 20px;
+  justify-content: space-between;
 }
 
 .notifications-header h3 {
   color: var(--primary);
   margin: 0;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-clear-notifications {
+  background: transparent;
+  border: 1px solid rgba(255, 159, 67, 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.btn-clear-notifications:hover:not(:disabled) {
+  background: rgba(255, 159, 67, 0.1);
+  border-color: var(--primary);
+  transform: scale(1.1);
+}
+
+.btn-clear-notifications:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .unread-badge {

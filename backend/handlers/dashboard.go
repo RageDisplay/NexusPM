@@ -56,11 +56,14 @@ type Notification struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
-// GetTaskStatistics возвращает статистику задач пользователя
+// GetTaskStatistics возвращает статистику задач пользователя за последние 7 дней
 func (h *DashboardHandler) GetTaskStatistics(c *gin.Context) {
 	userID := c.GetInt("userID")
 
 	var stats TaskStatistics
+
+	// Используем последние 7 дней вместо всех задач
+	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
 
 	err := h.db.QueryRow(`
 		SELECT 
@@ -71,8 +74,8 @@ func (h *DashboardHandler) GetTaskStatistics(c *gin.Context) {
 			COALESCE(SUM(hours_per_week), 0),
 			COALESCE(SUM(load_per_month), 0)
 		FROM tasks
-		WHERE user_id = ?
-	`, userID).Scan(
+		WHERE user_id = ? AND created_at >= ?
+	`, userID, sevenDaysAgo).Scan(
 		&stats.TotalTasks,
 		&stats.ActiveTasks,
 		&stats.CompletedTasks,
@@ -255,6 +258,32 @@ func (h *DashboardHandler) MarkNotificationAsRead(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Notification marked as read"})
+}
+
+// ClearNotifications удаляет все уведомления пользователя
+func (h *DashboardHandler) ClearNotifications(c *gin.Context) {
+	userID := c.GetInt("userID")
+
+	result, err := h.db.Exec(`
+		DELETE FROM notifications
+		WHERE user_id = ?
+	`, userID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Notifications cleared successfully",
+		"deleted": rowsAffected,
+	})
 }
 
 // LogActivity записывает действие в лог активности
