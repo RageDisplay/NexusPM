@@ -1,6 +1,9 @@
 package database
 
 import (
+	"crypto/sha256"
+	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -28,7 +31,7 @@ func CheckPasswordHash(password, hash string) bool {
 }
 
 func GenerateJWT(userID int, username, role, department string) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour)
+	expirationTime := time.Now().Add(3 * time.Hour)
 	claims := &Claims{
 		UserID:     userID,
 		Username:   username,
@@ -41,4 +44,40 @@ func GenerateJWT(userID int, username, role, department string) (string, error) 
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(JwtKey)
+}
+
+// HashToken создаёт хэш токена для хранения в БД
+func HashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("%x", hash)
+}
+
+// AddTokenToBlacklist добавляет токен в чёрный список
+func AddTokenToBlacklist(db *sql.DB, userID int, token string, expiresAt time.Time) error {
+	tokenHash := HashToken(token)
+	_, err := db.Exec(`
+		INSERT INTO token_blacklist (user_id, token_hash, expires_at)
+		VALUES (?, ?, ?)
+	`, userID, tokenHash, expiresAt)
+	return err
+}
+
+// IsTokenBlacklisted проверяет, находится ли токен в чёрном списке
+func IsTokenBlacklisted(db *sql.DB, token string) bool {
+	tokenHash := HashToken(token)
+	var exists bool
+	err := db.QueryRow(`
+		SELECT 1 FROM token_blacklist
+		WHERE token_hash = ? AND expires_at > datetime('now')
+	`, tokenHash).Scan(&exists)
+	return err == nil && exists
+}
+
+// CleanExpiredTokens удаляет истёкшие токены из чёрного списка (можно запускать периодически)
+func CleanExpiredTokens(db *sql.DB) error {
+	_, err := db.Exec(`
+		DELETE FROM token_blacklist
+		WHERE expires_at <= datetime('now')
+	`)
+	return err
 }

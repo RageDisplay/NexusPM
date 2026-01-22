@@ -752,3 +752,46 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		"message": "Пароль успешно изменен",
 	})
 }
+
+// Logout инвалидирует текущий токен пользователя
+func (h *AuthHandler) Logout(c *gin.Context) {
+	userID := c.GetInt("userID")
+	token, exists := c.Get("token")
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Token not found in context"})
+		return
+	}
+
+	tokenString, ok := token.(string)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid token format"})
+		return
+	}
+
+	// Декодируем токен чтобы получить время истечения
+	claims := &database.Claims{}
+	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return database.JwtKey, nil
+	})
+
+	if err != nil {
+		log.Printf("Logout: failed to parse token for user %d: %v", userID, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Добавляем токен в чёрный список
+	expiresAt := claims.ExpiresAt.Time
+	err = database.AddTokenToBlacklist(h.db, userID, tokenString, expiresAt)
+	if err != nil {
+		log.Printf("Logout: failed to add token to blacklist for user %d: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to logout"})
+		return
+	}
+
+	log.Printf("Logout: user %d successfully logged out, token added to blacklist", userID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Successfully logged out",
+	})
+}

@@ -56,13 +56,14 @@ func main() {
 
 	// Защищенные маршруты
 	api := router.Group("/api")
-	api.Use(middleware.AuthMiddleware())
+	api.Use(middleware.AuthMiddlewareWithDB(db))
 	{
 		// Авторизация
 		api.GET("/auth/profile", authHandler.GetProfile)
 		api.PUT("/auth/department", authHandler.UpdateDepartment)
 		api.POST("/auth/change-password", authHandler.ChangePassword)
 		api.POST("/auth/set-new-password", authHandler.SetNewPasswordAfterReset)
+		api.POST("/auth/logout", authHandler.Logout)
 		api.POST("/users/:id/reset-password", middleware.AdminOnly(), authHandler.ResetPassword)
 
 		// Задачи

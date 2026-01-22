@@ -36,52 +36,60 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="App">
-          <Navigation />
-          <div className="container">
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="/tasks" element={
-                <ProtectedRoute>
-                  <TaskManager />
-                </ProtectedRoute>
-              } />
-              <Route path="/projects" element={
-                <ProtectedRoute requiredRole={['admin', 'manager']}>
-                  <ProjectManagement />
-                </ProtectedRoute>
-              } />
-              <Route path="/users" element={
-                <ProtectedRoute requiredRole="admin">
-                  <UserManagement />
-                </ProtectedRoute>
-              } />
-              <Route path="/reports" element={
-                <ProtectedRoute>
-                  <Reports />
-                </ProtectedRoute>
-              } />
-              <Route path="/backup" element={
-                <ProtectedRoute requiredRole="admin">
-                  <BackupManager />
-                </ProtectedRoute>
-              } />
-              <Route path="/ad-config" element={
-                <ProtectedRoute requiredRole="admin">
-                  <ADConfigPanel />
-                </ProtectedRoute>
-              } />
-              <Route path="/" element={<Navigate to="/dashboard" />} />
-            </Routes>
-          </div>
-        </div>
+        <AppContent />
       </Router>
     </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const { user } = useAuth();
+
+  return (
+    <div className="App">
+      {user && <Navigation />}
+      <div className="container">
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/tasks" element={
+            <ProtectedRoute>
+              <TaskManager />
+            </ProtectedRoute>
+          } />
+          <Route path="/projects" element={
+            <ProtectedRoute requiredRole={['admin', 'manager']}>
+              <ProjectManagement />
+            </ProtectedRoute>
+          } />
+          <Route path="/users" element={
+            <ProtectedRoute requiredRole="admin">
+              <UserManagement />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports" element={
+            <ProtectedRoute>
+              <Reports />
+            </ProtectedRoute>
+          } />
+          <Route path="/backup" element={
+            <ProtectedRoute requiredRole="admin">
+              <BackupManager />
+            </ProtectedRoute>
+          } />
+          <Route path="/ad-config" element={
+            <ProtectedRoute requiredRole="admin">
+              <ADConfigPanel />
+            </ProtectedRoute>
+          } />
+          <Route path="/" element={<Navigate to="/dashboard" />} />
+        </Routes>
+      </div>
+    </div>
   );
 }
 

@@ -153,7 +153,18 @@ func InitDB() (*sql.DB, error) {
         FOREIGN KEY (user_id) REFERENCES users (id)
     );`
 
-	tables = append(tables, createPasswordRequestsTable, createActivityTable, createNotificationsTable)
+	// Таблица чёрного списка токенов
+	createTokenBlacklistTable := `
+    CREATE TABLE IF NOT EXISTS token_blacklist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token_hash VARCHAR(255) UNIQUE NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    );`
+
+	tables = append(tables, createPasswordRequestsTable, createActivityTable, createNotificationsTable, createTokenBlacklistTable)
 	for _, table := range tables {
 		_, err = db.Exec(table)
 		if err != nil {

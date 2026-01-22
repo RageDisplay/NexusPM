@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"database/sql"
 	"net/http"
 	"strings"
 	"task-management-backend/database"
@@ -10,6 +11,10 @@ import (
 )
 
 func AuthMiddleware() gin.HandlerFunc {
+	return AuthMiddlewareWithDB(nil)
+}
+
+func AuthMiddlewareWithDB(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -19,6 +24,14 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
+
+		// Проверяем чёрный список, если БД доступна
+		if db != nil && database.IsTokenBlacklisted(db, tokenString) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has been revoked"})
+			c.Abort()
+			return
+		}
+
 		claims := &database.Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
@@ -34,6 +47,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Set("userID", claims.UserID)
 		c.Set("userRole", claims.Role)
 		c.Set("userDepartment", claims.Department)
+		c.Set("token", tokenString)
 		c.Next()
 	}
 }

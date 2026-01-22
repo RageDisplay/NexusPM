@@ -6,8 +6,8 @@ const Navigation = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     window.location.href = '/login';
   };
 

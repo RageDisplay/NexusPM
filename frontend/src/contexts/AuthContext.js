@@ -36,10 +36,20 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
+  const logout = async () => {
+    try {
+      // Инвалидируем токен на сервере
+      await api.post('/api/auth/logout');
+    } catch (error) {
+      console.error('Error during logout:', error);
+    } finally {
+      // Очищаем локальное хранилище в любом случае
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setUser(null);
+      // Возвращаем promise, чтобы вызывающая функция могла ждать
+      return new Promise(resolve => setTimeout(resolve, 0));
+    }
   };
 
   const refreshUser = async () => {
