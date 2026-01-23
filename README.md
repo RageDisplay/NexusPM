@@ -2,10 +2,138 @@
 
 Комплексная система управления проектами, задачами и ресурсами с поддержкой нескольких уровней доступа, интеграцией с Active Directory/FreeIPA и автоматическими отчетами.
 
+## Быстрые ссылки
+
+**Версия:** 1.3.0  
+**Стек:** Go + React + SQLite + Docker  
+
 **Содержание:**
+- [Быстрый старт](#быстрый-старт)
+- [Архитектура](#архитектура-приложения)
 - [Для пользователей](#для-обычных-пользователей)
 - [Для администраторов](#для-администраторов-системы)
 - [Для разработчиков](#для-разработчиков)
+
+---
+
+## Быстрый старт
+
+### Установка с Docker (за 3 команды)
+
+```bash
+# 1. Клонируйте/откройте проект
+cd NexusPM
+
+# 2. Запустите контейнеры
+docker-compose up -d
+
+# 3. Откройте браузер
+# http://localhost:7000
+# Логин: admin | Пароль: main12!@
+```
+
+## Архитектура приложения
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          WEB BROWSER (HTTP)                              │
+└──────────────────────────┬──────────────────────────────────────────────┘
+                           │
+         ┌─────────────────▼──────────────────┐
+         │      FRONTEND (React.js)            │
+         │  ┌───────────────────────────────┐  │
+         │  │  Components:                   │  │
+         │  │  • Dashboard                   │  │
+         │  │  • TaskManager                 │  │
+         │  │  • ProjectManagement           │  │
+         │  │  • UserManagement              │  │
+         │  │  • Reports (Excel Export)      │  │
+         │  │  • ADConfigPanel               │  │
+         │  │  • Notifications               │  │
+         │  └───────────────────────────────┘  │
+         │  State: AuthContext + localStorage  │
+         │  Base URL: http://localhost:7000    │
+         └──────────────┬──────────────────────┘
+                        │ REST API (JSON)
+         ┌──────────────▼──────────────────┐
+         │    BACKEND (Go + Gin)            │
+         │  ┌───────────────────────────────┐  │
+         │  │  API Handlers:                  │  │
+         │  │  • Auth (JWT)                   │  │
+         │  │  • Tasks CRUD                   │  │
+         │  │  • Projects & Assignment        │  │
+         │  │  • Users Management             │  │
+         │  │  • Reports (Excel)              │  │
+         │  │  • Dashboard & Statistics       │  │
+         │  │  • AD/LDAP Sync                 │  │
+         │  │  • Backup/Restore               │  │
+         │  └───────────────────────────────┘  │
+         │  ┌───────────────────────────────┐  │
+         │  │  Middleware:                    │  │
+         │  │  • JWT Auth                     │  │
+         │  │  • Role-based Access Control    │  │
+         │  │  • CORS Headers                 │  │
+         │  └───────────────────────────────┘  │
+         │  ┌───────────────────────────────┐  │
+         │  │  Integrations:                  │  │
+         │  │  • LDAP/Active Directory        │  │
+         │  │  • FreeIPA                      │  │
+         │  │  • Excel Export (excelize)      │  │
+         │  └───────────────────────────────┘  │
+         │  Base URL: http://localhost:8080    │
+         └──────────────┬──────────────────────┘
+                        │ SQL Queries
+         ┌──────────────▼──────────────────┐
+         │   DATABASE (SQLite3)             │
+         │  ┌───────────────────────────────┐  │
+         │  │  Tables:                       │  │
+         │  │  • users (auth, roles, dept)   │  │
+         │  │  • tasks (task management)     │  │
+         │  │  • projects (projects)         │  │
+         │  │  • user_projects (assignment)  │  │
+         │  │  • notifications               │  │
+         │  │  • password_reset_requests     │  │
+         │  │  • ad_config (AD settings)     │  │
+         │  │  • activity_log                │  │
+         │  └───────────────────────────────┘  │
+         │  File: /backend/data/tasks.db       │
+         └──────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    DOCKER COMPOSE ORCHESTRATION                           │
+│  • nginx proxy (7000 → frontend)                                          │
+│  • Frontend container: Node.js + React                                    │
+│  • Backend container: Go runtime + SQLite                                 │
+│  • Volume: ./backend/data/tasks.db (persistent)                           │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    ВНЕШНИЕ СЕРВИСЫ (ОПЦИОНАЛЬНО)                          │
+│  ┌─────────────────────┐         ┌──────────────────┐                    │
+│  │ LDAP/AD Server      │         │ SMTP (Email)     │                    │
+│  │ (User Sync)         │         │ (Notifications)  │                    │
+│  └─────────────────────┘         └──────────────────┘                    │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Поток данных
+
+```
+1. АУТЕНТИФИКАЦИЯ
+   Browser → Login Form → Backend (/api/login) → JWT Token + User Data → localStorage
+
+2. ЗАЩИТА ЗАПРОСОВ
+   Browser → API Call → Authorization Header (Bearer Token) → Backend (Verify)
+
+3. УПРАВЛЕНИЕ ЗАДАЧАМИ
+   User → TaskManager UI → POST /api/tasks → Backend (Validate + DB) → SQL Insert
+
+4. СИНХРОНИЗАЦИЯ AD
+   Admin → ADConfigPanel → POST /api/ad-config/sync → LDAP Server → Create/Update Users
+
+5. ЭКСПОРТ ОТЧЕТОВ
+   User → Reports UI → GET /api/reports/* → Backend (Excel Generate) → Download XLSX
+```
 
 ---
 
@@ -189,63 +317,224 @@ NexusPM помогает организовать работу в проекта
 
 ### Требования
 
-- **ОС:** Windows, Linux, macOS
-- **Docker** (рекомендуется) или:
-  - Go 1.20+
-  - Node.js 16+
-  - SQLite3
+**Системные требования:**
+- **ОС:** Windows, Linux, macOS (все платформы)
+- **Docker** (рекомендуется):
+  - Docker 20.10+
+  - Docker Compose 1.29+
+  - 500 MB свободного места
+  
+**Либо локальная установка:**
+- **Go:** 1.20 или выше
+- **Node.js:** 16.0 или выше (LTS)
+- **npm:** 8.0 или выше
+- **SQLite3:** встроена в Go
+
+**Порты:**
+- **Frontend:** 7000 (или 3000 при локальном запуске, 80 при сборке из бандла)
+- **Backend:** 8080
+- **LDAP:** 389 (если используется AD/FreeIPA)
+
+### Переменные окружения
+
+#### Backend (.env файл)
+
+```bash
+# Обязательные
+ENCRYPTION_KEY=<32-символная строка в hex формате>
+# Сгенерировать: python3 scripts/generate_encryption_key.py
+
+# Опциональные (есть значения по умолчанию)
+GIN_MODE=release                # release или debug
+DB_PATH=/app/data/tasks.db      # Путь к БД (в Docker)
+JWT_EXPIRY=24h                  # Время жизни JWT токена
+```
+
+#### Frontend (.env файл - опционально)
+
+```bash
+REACT_APP_API_URL=http://localhost:8080
+REACT_APP_ENV=production
+```
 
 ### Установка с Docker (рекомендуется)
 
-1. **Установите Docker** - [скачать](https://docker.com)
+**Шаг 1: Подготовка переменных окружения**
 
-2. **Перейдите в папку проекта:**
 ```bash
-cd /path/to/NexusPM
+# Перейдите в backend
+cd backend
+
+# Сгенерируйте ключ шифрования
+python3 scripts/generate_encryption_key.py
+# или (Windows)
+python scripts/generate_encryption_key.py
+
+# Будет создан файл backend/.env с ENCRYPTION_KEY
 ```
 
-3. **Запустите контейнеры:**
-```bash
-docker-compose up -d
-```
+**Шаг 2: Запуск контейнеров**
 
-4. **Проверьте статус:**
 ```bash
+# Вернитесь в корень проекта
+cd ..
+
+# Запустите Docker Compose
+docker-compose up -d --build
+
+# Проверьте статус контейнеров
 docker-compose ps
 ```
 
-5. **Откройте браузер:**
+**Шаг 3: Первый вход**
+
 ```
-http://localhost:3000
+URL: http://localhost:7000
+Логин: admin
+Пароль: main12!@
 ```
 
-6. **Первый вход:**
-   - Логин: `admin`
-   - Пароль: `main12!@`
-
-### Запуск без Docker (локально)
-
-#### Backend (Go)
+**Команды управления:**
 
 ```bash
+# Остановить контейнеры
+docker-compose stop
+
+# Перезагрузить контейнеры
+docker-compose restart
+
+# Просмотреть логи
+docker-compose logs -f backend    # Логи backend
+docker-compose logs -f frontend   # Логи frontend
+
+# Удалить контейнеры (данные сохранятся)
+docker-compose down
+
+# Полная очистка (включая базу данных)
+docker-compose down -v
+```
+
+### Запуск без Docker (локальная разработка)
+
+**Backend (Go)**
+
+```bash
+# Перейдите в backend
 cd backend
+
+# Сгенерируйте ENCRYPTION_KEY (если еще не сделали)
+python3 scripts/generate_encryption_key.py
+
+# Установите зависимости
 go mod download
+
+# Запустите сервер
 go run main.go
+
+# Сервер стартанет на http://localhost:8080
 ```
 
-Сервер запустится на `http://localhost:8080`
+**Frontend (React)**
 
-#### Frontend (React)
-
-В новом терминале:
+В **новом терминале**:
 
 ```bash
+# Перейдите в frontend
 cd frontend
+
+# Установите зависимости
 npm install
+
+# Запустите разработчика сервер
 npm start
+
+# Откроется на http://localhost:3000
 ```
 
-Приложение откроется на `http://localhost:3000`
+**Проверка готовности**
+
+```bash
+# Backend готов, когда видите:
+# Server starting on :8080
+
+# Frontend готов, когда браузер откроет:
+# http://localhost:3000
+
+# Проверка API подключения:
+curl http://localhost:8080/api/ad-config/status
+```
+
+---
+
+# ДЛЯ АДМИНИСТРАТОРОВ СИСТЕМЫ
+
+## Обзор администрирования
+
+Администратор системы имеет полный доступ ко всем функциям:
+- Управление пользователями (создание, удаление, изменение ролей)
+- Управление всеми проектами и задачами
+- Конфигурация интеграции с Active Directory / FreeIPA
+- Создание резервных копий базы данных
+- Просмотр всех данных системы
+
+## Безопасность
+
+### Аутентификация и авторизация
+
+**JWT Token (JSON Web Token):**
+- Выдается при входе на 24 часа
+- Хранится в `localStorage` браузера
+- Отправляется в заголовке `Authorization: Bearer {token}`
+- Содержит: user_id, username, role, department, exp time
+- Проверяется на каждый защищенный запрос
+
+**Пароли:**
+- Хешируются через bcrypt (не хранятся в открытом виде)
+- Минимальная длина: 6 символов (рекомендуется 12+)
+- При сбросе генерируется криптографически стойкий временный пароль
+- Пользователь обязан установить новый пароль после сброса
+
+**Роли и доступ:**
+```
+USER (обычный сотрудник)
+├─ Видит только свои задачи
+├─ Может управлять только своими задачами
+└─ Может экспортировать только свои задачи
+
+MANAGER (менеджер)
+├─ Видит все задачи своего отдела
+├─ Может управлять задачами своего отдела
+├─ Может создавать/назначать проекты для отдела
+├─ Может управлять только пользователями своего отдела
+└─ Видит статистику своего отдела
+
+ADMIN (администратор)
+├─ Полный доступ ко всему
+├─ Управление всеми пользователями
+├─ Конфигурация системы
+└─ Интеграция с внешними системами
+```
+
+### Шифрование
+
+**ENCRYPTION_KEY:**
+- Используется для шифрования чувствительных данных
+- 32 символа в hexadecimal формате
+- **ОБЯЗАТЕЛЬНО** установить перед первым запуском
+- **ВАЖНО:** Не делитесь ключом, храните в безопасности
+- Сгенерировать: `python3 backend/scripts/generate_encryption_key.py`
+
+### HTTPS (для продакшена)
+
+**Текущая конфигурация (разработка):**
+- HTTP (не защищен)
+- CORS включен для всех источников (для разработки)
+
+**Для прода необходимо:**
+1. Добавить SSL сертификаты
+2. Сконфигурировать nginx (см. frontend/nginx.conf)
+3. Ограничить CORS по источникам
+4. Включить HTTPS только
 
 ## Управление пользователями
 
@@ -303,7 +592,7 @@ npm start
 5. **Пароль сервисного аккаунта:** введите пароль
 6. **OU для поиска пользователей:** `ou=Users,dc=example,dc=com`
 7. **Атрибут имени:** `sAMAccountName` (AD) или `uid` (FreeIPA)
-8. **Интервал синхронизации:** количество минут
+8. **Интервал синхронизации:** количество минут (пока заглушка)
 
 ### Проверка подключения
 
@@ -321,7 +610,7 @@ npm start
 
 ### Создание резервной копии
 
-1. На вкладке "Пользователи" нажмите **"📥 Скачать резервную копию"**
+1. На вкладке "Пользователи" нажмите **"Скачать резервную копию"**
 2. Начнется скачивание файла `backup.db`
 3. Сохраните файл в безопасном месте
 
@@ -983,7 +1272,83 @@ Frontend получает успех
 - **Frontend:** React 18, Axios, Context API, CSS3
 - **Backend:** Go 1.20+, Gin Framework, SQLite3, JWT, excelize, LDAP
 - **DevOps:** Docker, Docker Compose, nginx
+- **Database:** SQLite3 (встроенная, не требует отдельного сервера)
+- **Security:** bcrypt (пароли), JWT (токены), crypto/aes (шифрование)
 
 ---
 
-**Последнее обновление документации:** 14 января 2026 г.
+## Решение проблем (Troubleshooting)
+
+### Docker проблемы
+
+**Проблема:** Порт уже занят
+```bash
+docker-compose down
+# Отредактируйте docker-compose.yml и измените порт
+```
+
+**Проблема:** `ENCRYPTION_KEY environment variable is not set`
+```bash
+cd backend
+python3 scripts/generate_encryption_key.py
+```
+
+### Frontend проблемы
+
+**Проблема:** CORS ошибка
+```
+1. Убедитесь, что backend запущен на http://localhost:8080
+2. Проверьте baseURL в компонентах frontend
+3. Проверьте firewall
+```
+
+**Проблема:** Белый экран
+```bash
+docker-compose logs -f frontend
+docker-compose restart
+```
+
+### Backend проблемы
+
+**Проблема:** `database is locked`
+```bash
+docker-compose restart backend
+docker-compose down -v
+docker-compose up -d
+```
+
+**Проблема:** LDAP/AD не подключается
+```
+1. Проверьте URL LDAP сервера (ldap://host:389)
+2. Проверьте Bind DN и пароль
+3. Проверьте доступность сервера из контейнера
+```
+
+### Авторизация
+
+**Проблема:** Забыли пароль admin
+```bash
+docker-compose down -v
+docker-compose up -d
+# Система создаст admin с паролем main12!@
+```
+
+**Проблема:** JWT токен истек
+```bash
+# Удалите 'token' и 'user' из localStorage
+# Заново войдите в систему
+```
+
+---
+
+## Поддержка и развитие
+
+### Источники информации
+
+- **Логи:** `docker-compose logs -f backend` / `docker-compose logs -f frontend`
+- **База данных:** `./backend/data/tasks.db`
+- **Конфигурация:** `./backend/.env`
+
+---
+
+**Последнее обновление документации:** 23 января 2026 г.

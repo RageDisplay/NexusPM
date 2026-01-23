@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"task-management-backend/crypto"
 	"task-management-backend/models"
 
 	ldap "github.com/go-ldap/ldap/v3"
@@ -31,6 +32,7 @@ func NewLDAPManager(db *sql.DB) *LDAPManager {
 // GetADConfig получает конфигурацию AD из БД
 func (lm *LDAPManager) GetADConfig() (*models.ADConfig, error) {
 	var config models.ADConfig
+	var encryptedPassword string
 	err := lm.db.QueryRow(`
 		SELECT id, enabled, directory_type, server_url, base_dn, bind_dn, 
 		       bind_password, user_search_base, user_name_attr, department_attr, 
@@ -41,7 +43,7 @@ func (lm *LDAPManager) GetADConfig() (*models.ADConfig, error) {
 		LIMIT 1
 	`).Scan(
 		&config.ID, &config.Enabled, &config.DirectoryType, &config.ServerURL,
-		&config.BaseDN, &config.BindDN, &config.BindPassword, &config.UserSearchBase,
+		&config.BaseDN, &config.BindDN, &encryptedPassword, &config.UserSearchBase,
 		&config.UserNameAttr, &config.DepartmentAttr, &config.EmailAttr,
 		&config.GroupSearchBase, &config.SyncInterval, &config.TLSEnabled,
 		&config.CertificatePath, &config.SkipCertVerify, &config.CreatedAt, &config.UpdatedAt,
@@ -54,11 +56,37 @@ func (lm *LDAPManager) GetADConfig() (*models.ADConfig, error) {
 		return nil, err
 	}
 
+	// Расшифровываем пароль
+	if encryptedPassword != "" {
+		encryptor, err := crypto.LoadKeyFromEnv()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load encryption key: %w", err)
+		}
+
+		decrypted, err := encryptor.Decrypt(encryptedPassword)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt password: %w", err)
+		}
+
+		config.BindPassword = decrypted
+	}
+
 	return &config, nil
 }
 
 // SaveADConfig сохраняет конфигурацию AD в БД
 func (lm *LDAPManager) SaveADConfig(config *models.ADConfig) error {
+	// Шифруем пароль
+	encryptor, err := crypto.LoadKeyFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load encryption key: %w", err)
+	}
+
+	encryptedPassword, err := encryptor.Encrypt(config.BindPassword)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt password: %w", err)
+	}
+
 	result, err := lm.db.Exec(`
 		INSERT INTO ad_config (
 			enabled, directory_type, server_url, base_dn, bind_dn, bind_password,
@@ -68,7 +96,7 @@ func (lm *LDAPManager) SaveADConfig(config *models.ADConfig) error {
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		config.Enabled, config.DirectoryType, config.ServerURL, config.BaseDN,
-		config.BindDN, config.BindPassword, config.UserSearchBase, config.UserNameAttr,
+		config.BindDN, encryptedPassword, config.UserSearchBase, config.UserNameAttr,
 		config.DepartmentAttr, config.EmailAttr, config.GroupSearchBase,
 		config.SyncInterval, config.TLSEnabled, config.CertificatePath,
 		config.SkipCertVerify, time.Now(), time.Now(),
@@ -89,7 +117,18 @@ func (lm *LDAPManager) SaveADConfig(config *models.ADConfig) error {
 
 // UpdateADConfig обновляет конфигурацию AD
 func (lm *LDAPManager) UpdateADConfig(config *models.ADConfig) error {
-	_, err := lm.db.Exec(`
+	// Шифруем пароль
+	encryptor, err := crypto.LoadKeyFromEnv()
+	if err != nil {
+		return fmt.Errorf("failed to load encryption key: %w", err)
+	}
+
+	encryptedPassword, err := encryptor.Encrypt(config.BindPassword)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt password: %w", err)
+	}
+
+	_, err = lm.db.Exec(`
 		UPDATE ad_config
 		SET enabled = ?, directory_type = ?, server_url = ?, base_dn = ?,
 		    bind_dn = ?, bind_password = ?, user_search_base = ?,
@@ -99,7 +138,7 @@ func (lm *LDAPManager) UpdateADConfig(config *models.ADConfig) error {
 		WHERE id = ?
 	`,
 		config.Enabled, config.DirectoryType, config.ServerURL, config.BaseDN,
-		config.BindDN, config.BindPassword, config.UserSearchBase,
+		config.BindDN, encryptedPassword, config.UserSearchBase,
 		config.UserNameAttr, config.DepartmentAttr, config.EmailAttr,
 		config.GroupSearchBase, config.SyncInterval, config.TLSEnabled,
 		config.CertificatePath, config.SkipCertVerify, time.Now(), config.ID,

@@ -19,7 +19,6 @@ RUN apk --no-cache add ca-certificates sqlite-libs
 WORKDIR /app
 
 COPY --from=builder /app/main .
-
 RUN mkdir -p /app/data
 
 EXPOSE 8080

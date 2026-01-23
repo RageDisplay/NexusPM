@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"task-management-backend/database"
 	"task-management-backend/handlers"
 	"task-management-backend/middleware"
@@ -10,6 +11,13 @@ import (
 )
 
 func main() {
+
+	// Проверяем наличие ключа шифрования
+	encryptionKey := os.Getenv("ENCRYPTION_KEY")
+	if encryptionKey == "" {
+		log.Fatal("ENCRYPTION_KEY environment variable is not set. Run scripts/generate_encryption_key.py to create .env file")
+	}
+
 	// Инициализация базы данных
 	db, err := database.InitDB()
 	if err != nil {
