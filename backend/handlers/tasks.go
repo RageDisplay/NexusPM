@@ -147,10 +147,9 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	task.ID = int(id)
 	task.UserID = assignToUserID
 
-	// Log activity
 	LogActivity(h.db, userID, "task_created", "Создана задача: "+task.Title, &task.ID, &task.ProjectID)
 
-	// Create notification for the assigned user
+	// Создание уведомления для назначенного пользователя
 	if assignToUserID != userID {
 		// Если задача назначена другому пользователю
 		CreateNotification(h.db, assignToUserID, "task_assigned", "Вам назначена новая задача", "Новая задача: "+task.Title, &task.ID)
@@ -366,7 +365,7 @@ func (h *TaskHandler) DuplicateTask(c *gin.Context) {
 	duplicateTaskID := int(newID)
 	LogActivity(h.db, userID, "task_created", "Дублирована задача: "+newTask.Title, &duplicateTaskID, &newTask.ProjectID)
 
-	// Create notification for the assigned user
+	// Создание уведомления для назначенного пользователя
 	if newTask.UserID != userID {
 		CreateNotification(h.db, newTask.UserID, "task_assigned", "Вам назначена новая задача", "Новая задача: "+newTask.Title, &duplicateTaskID)
 	}

@@ -197,7 +197,7 @@ func generateTempPassword(n int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// base64 encode and trim to requested length, replace '+' and '/' with letters
+	// Временный пароль в base64 URL-encoded формате
 	s := base64.RawURLEncoding.EncodeToString(b)
 	if len(s) > n {
 		s = s[:n]

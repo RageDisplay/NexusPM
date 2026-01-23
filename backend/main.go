@@ -30,7 +30,7 @@ func main() {
 
 	router := gin.Default()
 
-	// Разрешаем все хосты и методы (не забыть потом настроить)
+	// Разрешаем все хосты и методы (Надо потом настроить под конкретные домены)
 	router.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -86,7 +86,7 @@ func main() {
 
 		// Пользователи (только для админов)
 		api.GET("/users", userHandler.GetUsers)
-		// Admin endpoints to manage password reset requests
+		// Админские маршруты для заявок на сброс пароля
 		api.GET("/password-reset-requests", middleware.AdminOnly(), passwordRequestsHandler.ListRequests)
 		api.POST("/password-reset-requests/:id/process", middleware.AdminOnly(), passwordRequestsHandler.ProcessRequest)
 		api.POST("/password-reset-requests/:id/reject", middleware.AdminOnly(), passwordRequestsHandler.RejectRequest)

@@ -153,7 +153,7 @@ func (h *ADConfigHandler) SetupADConfig(c *gin.Context) {
 	})
 }
 
-// TestADConnection проверяет подключение к AD серверу
+// TestADConnection проверяет подключение к AD серверу (НЕ РАБОТАЕТ)
 func (h *ADConfigHandler) TestADConnection(c *gin.Context) {
 	var req struct {
 		ServerURL    string `json:"server_url" binding:"required"`
@@ -190,7 +190,7 @@ func (h *ADConfigHandler) SyncADUsers(c *gin.Context) {
 	})
 }
 
-// testLDAPConnection тестирует подключение к LDAP серверу
+// testLDAPConnection тестирует подключение к LDAP серверу (НЕ РАБОТАЕТ)
 func (h *ADConfigHandler) testLDAPConnection(serverURL, bindDN, bindPassword string) error {
 	// Используем методы ldapManager для проверки подключения
 	// Создаём временную конфигурацию и пытаемся подключиться

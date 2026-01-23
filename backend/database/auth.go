@@ -83,7 +83,7 @@ func IsTokenBlacklisted(db *sql.DB, token string) bool {
 	return err == nil && exists
 }
 
-// CleanExpiredTokens удаляет истёкшие токены из чёрного списка (можно запускать периодически)
+// CleanExpiredTokens удаляет истёкшие токены из чёрного списка
 func CleanExpiredTokens(db *sql.DB) error {
 	_, err := db.Exec(`
 		DELETE FROM token_blacklist

@@ -173,7 +173,7 @@ func InitDB() (*sql.DB, error) {
 	}
 
 	// Создание администратора по умолчанию
-	hashedPassword, _ := HashPassword("main12!@")
+	hashedPassword, _ := HashPassword("main12!@") // Поменять после инициализации системы
 	db.Exec(`INSERT OR IGNORE INTO users (username, password_hash, role, department, is_ad_user, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "admin", hashedPassword, "admin", "Администрация", false, time.Now(), time.Now())
 
 	log.Println("Database initialized successfully")
