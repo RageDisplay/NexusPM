@@ -59,7 +59,17 @@ func AddTokenToBlacklist(db *sql.DB, userID int, token string, expiresAt time.Ti
 		INSERT INTO token_blacklist (user_id, token_hash, expires_at)
 		VALUES (?, ?, ?)
 	`, userID, tokenHash, expiresAt)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Удаляем просроченные токены из блеклиста
+	if cleanErr := CleanExpiredTokens(db); cleanErr != nil {
+		// Логируем ошибку очистки, но не прерываем logout
+		fmt.Println("Warning: failed to clean expired tokens:", cleanErr)
+	}
+
+	return nil
 }
 
 // IsTokenBlacklisted проверяет, находится ли токен в чёрном списке
