@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
+	"task-management-backend/database"
 	"task-management-backend/models"
 
 	"github.com/gin-gonic/gin"
@@ -38,7 +39,20 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
             ORDER BY t.created_at DESC
         `)
 	case "manager":
-		rows, err = h.db.Query(`
+		// Получаем все доступные отделы для менеджера (основной + дополнительные)
+		departments, err := database.GetManagerDepartments(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Если менеджер не имеет никаких отделов, показываем только его основной
+		if len(departments) == 0 {
+			departments = []string{userDepartment}
+		}
+
+		// Строим запрос с фильтром по всем доступным отделам
+		query := `
             SELECT t.id, t.title, t.description, t.progress, t.hours_per_week, t.load_per_month, 
                    t.weekly_info, t.planning, t.help_needed, t.user_id, t.project_id, 
                    t.created_at, t.updated_at, u.username, u.department, COALESCE(p.name, '') as project_name,
@@ -46,9 +60,20 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
             FROM tasks t 
             JOIN users u ON t.user_id = u.id 
             LEFT JOIN projects p ON t.project_id = p.id
-            WHERE u.department = ? 
-            ORDER BY t.created_at DESC
-        `, userDepartment)
+            WHERE u.department IN (`
+
+		args := make([]interface{}, len(departments))
+		for i, dept := range departments {
+			args[i] = dept
+			if i > 0 {
+				query += ", "
+			}
+			query += "?"
+		}
+
+		query += `) ORDER BY t.created_at DESC`
+
+		rows, err = h.db.Query(query, args...)
 	default:
 		rows, err = h.db.Query(`
             SELECT t.id, t.title, t.description, t.progress, t.hours_per_week, t.load_per_month, 
@@ -122,7 +147,6 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 func (h *TaskHandler) CreateTask(c *gin.Context) {
 	userID := c.GetInt("userID")
 	userRole := c.GetString("userRole")
-	userDepartment := c.GetString("userDepartment")
 
 	var task models.Task
 	if err := c.ShouldBindJSON(&task); err != nil {
@@ -138,11 +162,31 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 
 	// Если это не админ, то manager может создавать задачи только для своего отдела
 	if userRole == "manager" && task.UserID != 0 {
-		// Проверяем, что пользователь принадлежит отделу менеджера
+		// Получаем все доступные отделы менеджера
+		departments, err := database.GetManagerDepartments(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Проверяем, что пользователь принадлежит одному из доступных отделов менеджера
 		var taskUserDept sql.NullString
-		err := h.db.QueryRow("SELECT department FROM users WHERE id = ?", task.UserID).Scan(&taskUserDept)
-		if err != nil || !taskUserDept.Valid || taskUserDept.String != userDepartment {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете назначать задачи только сотрудникам своего отдела"})
+		err = h.db.QueryRow("SELECT department FROM users WHERE id = ?", task.UserID).Scan(&taskUserDept)
+		if err != nil || !taskUserDept.Valid {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Пользователь не найден"})
+			return
+		}
+
+		// Проверяем, что отдел пользователя в списке доступных отделов
+		allowed := false
+		for _, dept := range departments {
+			if taskUserDept.String == dept {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете назначать задачи только сотрудникам доступных вам отделов"})
 			return
 		}
 	}
@@ -182,7 +226,6 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 	taskID, _ := strconv.Atoi(c.Param("id"))
 	userID := c.GetInt("userID")
 	userRole := c.GetString("userRole")
-	userDepartment := c.GetString("userDepartment")
 
 	// Проверка прав доступа и получение текущих данных задачи
 	var taskUserID int
@@ -207,9 +250,31 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		return
 	}
 
-	if userRole == "manager" && (!taskUserDept.Valid || taskUserDept.String != userDepartment) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете редактировать только задачи вашего отдела"})
+	if userRole == "manager" && (!taskUserDept.Valid) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Задача не найдена"})
 		return
+	}
+
+	if userRole == "manager" {
+		// Получаем все доступные отделы менеджера
+		departments, err := database.GetManagerDepartments(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Проверяем, что отдел пользователя в списке доступных отделов
+		allowed := false
+		for _, dept := range departments {
+			if taskUserDept.String == dept {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете редактировать только задачи из доступных вам отделов"})
+			return
+		}
 	}
 
 	var task models.Task
@@ -264,7 +329,6 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	taskID, _ := strconv.Atoi(c.Param("id"))
 	userID := c.GetInt("userID")
 	userRole := c.GetString("userRole")
-	userDepartment := c.GetString("userDepartment")
 
 	// Проверка прав доступа
 	var taskUserID int
@@ -280,9 +344,31 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 		return
 	}
 
-	if userRole == "manager" && (!taskUserDept.Valid || taskUserDept.String != userDepartment) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять только задачи вашего отдела"})
+	if userRole == "manager" && (!taskUserDept.Valid) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Задача не найдена"})
 		return
+	}
+
+	if userRole == "manager" {
+		// Получаем все доступные отделы менеджера
+		departments, err := database.GetManagerDepartments(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Проверяем, что отдел пользователя в списке доступных отделов
+		allowed := false
+		for _, dept := range departments {
+			if taskUserDept.String == dept {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять только задачи из доступных вам отделов"})
+			return
+		}
 	}
 
 	_, err = h.db.Exec("DELETE FROM tasks WHERE id = ?", taskID)
@@ -323,6 +409,28 @@ func (h *TaskHandler) DuplicateTask(c *gin.Context) {
 	if userRole == "user" && task.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете дублировать только свои задачи"})
 		return
+	}
+
+	if userRole == "manager" {
+		// Получаем все доступные отделы менеджера
+		departments, err := database.GetManagerDepartments(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Проверяем, что отдел пользователя в списке доступных отделов
+		allowed := false
+		for _, dept := range departments {
+			if department.Valid && department.String == dept {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете дублировать только задачи из доступных вам отделов"})
+			return
+		}
 	}
 
 	// Создаем дублированную задачу

@@ -106,6 +106,13 @@ func main() {
 		api.PUT("/users/:id/department", middleware.AdminOnly(), userHandler.UpdateUserDepartment)
 		api.DELETE("/users/:id", middleware.AdminOnly(), userHandler.DeleteUser)
 
+		// Управление доступом менеджеров к дополнительным отделам (только для админов)
+		api.GET("/users/:id/departments", middleware.AdminOrSelf(), userHandler.GetManagerDepartments)
+		api.GET("/users/:id/additional-departments", middleware.AdminOnly(), userHandler.GetManagerAdditionalDepartments)
+		api.POST("/users/:id/departments/add", middleware.AdminOnly(), userHandler.AddDepartmentAccess)
+		api.POST("/users/:id/departments/remove", middleware.AdminOnly(), userHandler.RemoveDepartmentAccess)
+		api.GET("/departments", userHandler.GetAllDepartments)
+
 		// Отчеты
 		api.GET("/reports/my-tasks", reportHandler.ExportMyTasks)
 		api.GET("/reports/department-tasks", middleware.ManagerOrAdmin(), reportHandler.ExportDepartmentTasks)

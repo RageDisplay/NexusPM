@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import ManagerDepartmentAccess from './ManagerDepartmentAccess';
 
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
@@ -11,6 +12,7 @@ const UserManagement = () => {
     const [resettingPasswords, setResettingPasswords] = useState({});
     const [passwordRequests, setPasswordRequests] = useState([]);
     const [processingRequests, setProcessingRequests] = useState({});
+    const [selectedManagerForDepts, setSelectedManagerForDepts] = useState(null);
     const { user: currentUser } = useAuth();
 
     useEffect(() => {
@@ -293,6 +295,23 @@ const UserManagement = () => {
                                 </td>
                                 <td>
                                     <div style={{ display: 'flex', gap: '5px', flexDirection: 'column' }}>
+                                        {userItem.role === 'manager' && (
+                                            <button 
+                                                className="btn"
+                                                onClick={() => setSelectedManagerForDepts(userItem)}
+                                                style={{
+                                                    padding: '3px 8px',
+                                                    fontSize: '12px',
+                                                    backgroundColor: '#17a2b8',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: '3px',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Отделы
+                                            </button>
+                                        )}
                                         {hasUnsavedChanges(userItem) && (
                                             <div style={{ display: 'flex', gap: '5px' }}>
                                                 <button 
@@ -381,6 +400,17 @@ const UserManagement = () => {
                 </table>
                 {users.length === 0 && !loading && <p>Пользователи не найдены.</p>}
             </div>
+
+            {selectedManagerForDepts && (
+                <ManagerDepartmentAccess
+                    managerId={selectedManagerForDepts.id}
+                    managerName={`${selectedManagerForDepts.username} (${selectedManagerForDepts.department})`}
+                    onClose={() => {
+                        setSelectedManagerForDepts(null);
+                        fetchUsers(); // Перезагружаем список пользователей для актуальной информации
+                    }}
+                />
+            )}
         </div>
     );
 };

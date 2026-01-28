@@ -49,9 +49,32 @@ const TaskManager = () => {
     const fetchDepartmentUsers = async () => {
         try {
             const response = await api.get('/api/users');
+            console.log('All users from API:', response.data);
             if (response.data) {
-                const filtered = response.data.filter(u => u.department === user?.department);
-                setDepartmentUsers(filtered);
+                try {
+                    // Получаем доступные отделы менеджера
+                    const deptResponse = await api.get(`/api/users/${user.id}/departments`);
+                    console.log('Manager departments response:', deptResponse.data);
+                    const managerDepartments = Array.isArray(deptResponse.data) 
+                        ? deptResponse.data 
+                        : deptResponse.data?.departments || [];
+                    
+                    console.log('Parsed manager departments:', managerDepartments);
+                    
+                    // Фильтруем пользователей по доступным отделам
+                    const filtered = response.data.filter(u => 
+                        managerDepartments.includes(u.department)
+                    );
+                    console.log('Filtered department users:', filtered);
+                    setDepartmentUsers(filtered);
+                } catch (error) {
+                    // Если не удалось получить доступные отделы, используем только основной отдел
+                    console.warn('Could not fetch manager departments:', error);
+                    console.log('User department:', user?.department);
+                    const filtered = response.data.filter(u => u.department === user?.department);
+                    console.log('Fallback filtered users:', filtered);
+                    setDepartmentUsers(filtered);
+                }
             }
         } catch (error) {
             console.error('Error fetching department users:', error);

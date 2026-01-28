@@ -120,7 +120,7 @@ const DepartmentStatistics = () => {
     return (
         <div className="department-statistics">
             <div className="statistics-header">
-                <h2>Статистика отдела: {user?.department}</h2>
+                <h2>Статистика {user?.role === 'manager' ? 'доступных отделов' : `отдела: ${user?.department}`}</h2>
                 
                 <div className="date-range-selector">
                     <div className="date-input-group">

@@ -37,12 +37,27 @@ const ProjectManagement = () => {
     const fetchUsers = async () => {
         try {
             const response = await api.get('/api/users');
+            console.log('All users from API:', response.data);
             if (response.data) {
                 let userList = response.data;
                 
-                // Для менеджера - только пользователи его отдела (любой роли)
+                // Для менеджера - пользователи всех доступных ему отделов (первичный + дополнительные)
                 if (user?.role === 'manager') {
-                    userList = userList.filter(u => u.department === user?.department);
+                    try {
+                        const managerDepartmentsResponse = await api.get(`/api/users/${user.id}/departments`);
+                        console.log('Manager departments response:', managerDepartmentsResponse.data);
+                        const managerDepartments = Array.isArray(managerDepartmentsResponse.data) 
+                            ? managerDepartmentsResponse.data 
+                            : managerDepartmentsResponse.data?.departments || [];
+                        console.log('Parsed manager departments for user', user.id, ':', managerDepartments);
+                        userList = userList.filter(u => managerDepartments.includes(u.department));
+                        console.log('Filtered users by departments:', userList);
+                    } catch (error) {
+                        console.warn('Could not fetch manager departments:', error);
+                        console.log('Fallback: using user department:', user?.department);
+                        userList = userList.filter(u => u.department === user?.department);
+                        console.log('Filtered users by single department:', userList);
+                    }
                 }
                 // Для админа - все пользователи
                 

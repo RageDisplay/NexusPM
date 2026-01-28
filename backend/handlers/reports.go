@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"task-management-backend/database"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -137,19 +138,51 @@ func (h *ReportHandler) ExportMyTasks(c *gin.Context) {
 }
 
 func (h *ReportHandler) ExportDepartmentTasks(c *gin.Context) {
+	userID := c.GetInt("userID")
+	userRole := c.GetString("userRole")
 	userDepartment := c.GetString("userDepartment")
 
 	// Получаем параметры дат
 	startDateStr := c.Query("start_date")
 	endDateStr := c.Query("end_date")
 
-	query := `
+	var query string
+	var args []interface{}
+
+	// Определяем, какие отделы видит пользователь
+	var departments []string
+	if userRole == "manager" {
+		// Получаем все доступные отделы для менеджера (основной + дополнительные)
+		depts, err := database.GetManagerDepartments(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		departments = depts
+
+		// Если менеджер не имеет никаких отделов, показываем только его основной
+		if len(departments) == 0 {
+			departments = []string{userDepartment}
+		}
+	} else {
+		departments = []string{userDepartment}
+	}
+
+	// Строим запрос с фильтром по всем доступным отделам
+	query = `
         SELECT ROW_NUMBER() OVER (ORDER BY t.created_at) as row_num, u.first_name, u.last_name, u.patronymic, t.title, t.weekly_info, t.planning, t.help_needed, t.hours_per_week, t.load_per_month
         FROM tasks t 
         JOIN users u ON t.user_id = u.id 
-        WHERE u.department = ?`
+        WHERE u.department IN (`
 
-	args := []interface{}{userDepartment}
+	for i, dept := range departments {
+		args = append(args, dept)
+		if i > 0 {
+			query += ", "
+		}
+		query += "?"
+	}
+	query += ")"
 
 	// Добавляем фильтр по датам если указаны
 	if startDateStr != "" && endDateStr != "" {

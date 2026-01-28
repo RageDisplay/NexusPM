@@ -167,7 +167,20 @@ func InitDB() (*sql.DB, error) {
         FOREIGN KEY (user_id) REFERENCES users (id)
     );`
 
-	tables = append(tables, createPasswordRequestsTable, createActivityTable, createNotificationsTable, createTokenBlacklistTable)
+	// Таблица дополнительных отделов для менеджеров
+	createManagerDepartmentsTable := `
+    CREATE TABLE IF NOT EXISTS manager_departments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        manager_id INTEGER NOT NULL,
+        department VARCHAR(100) NOT NULL,
+        granted_by INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(manager_id, department),
+        FOREIGN KEY (manager_id) REFERENCES users (id),
+        FOREIGN KEY (granted_by) REFERENCES users (id)
+    );`
+
+	tables = append(tables, createPasswordRequestsTable, createActivityTable, createNotificationsTable, createTokenBlacklistTable, createManagerDepartmentsTable)
 	for _, table := range tables {
 		_, err = db.Exec(table)
 		if err != nil {

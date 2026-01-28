@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"task-management-backend/database"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +30,7 @@ func NewStatisticsHandler(db *sql.DB) *StatisticsHandler {
 
 // GetDepartmentStatistics возвращает статистику всех сотрудников отдела менеджера
 func (h *StatisticsHandler) GetDepartmentStatistics(c *gin.Context) {
+	userID := c.GetInt("userID")
 	userRole := c.GetString("userRole")
 	userDepartment := c.GetString("userDepartment")
 
@@ -70,13 +72,35 @@ func (h *StatisticsHandler) GetDepartmentStatistics(c *gin.Context) {
 			ORDER BY u.department, u.last_name, u.first_name
 		`)
 	} else {
-		// Менеджер видит только пользователей своего отдела
-		rows, err = h.db.Query(`
+		// Менеджер видит пользователей своего отдела и доступных ему дополнительных отделов
+		departments, err := database.GetManagerDepartments(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Если менеджер не имеет никаких отделов, показываем только его основной
+		if len(departments) == 0 {
+			departments = []string{userDepartment}
+		}
+
+		// Строим запрос с фильтром по всем доступным отделам
+		query := `
 			SELECT DISTINCT u.id, u.username, u.role, u.department, u.first_name, u.last_name, u.patronymic
 			FROM users u
-			WHERE u.department = ?
-			ORDER BY u.last_name, u.first_name
-		`, userDepartment)
+			WHERE u.department IN (`
+
+		args := make([]interface{}, len(departments))
+		for i, dept := range departments {
+			args[i] = dept
+			if i > 0 {
+				query += ", "
+			}
+			query += "?"
+		}
+		query += `) ORDER BY u.department, u.last_name, u.first_name`
+
+		rows, err = h.db.Query(query, args...)
 	}
 
 	if err != nil {
@@ -161,6 +185,7 @@ func (h *StatisticsHandler) GetDepartmentStatistics(c *gin.Context) {
 
 // ClearDepartmentTasks удаляет все задачи сотрудников отдела менеджера
 func (h *StatisticsHandler) ClearDepartmentTasks(c *gin.Context) {
+	userID := c.GetInt("userID")
 	userRole := c.GetString("userRole")
 	userDepartment := c.GetString("userDepartment")
 
@@ -170,14 +195,36 @@ func (h *StatisticsHandler) ClearDepartmentTasks(c *gin.Context) {
 		return
 	}
 
-	// Удаляем все задачи пользователей из отдела менеджера
-	result, err := h.db.Exec(`
+	// Получаем все доступные отделы для менеджера
+	departments, err := database.GetManagerDepartments(h.db, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Если менеджер не имеет никаких отделов, показываем только его основной
+	if len(departments) == 0 {
+		departments = []string{userDepartment}
+	}
+
+	// Строим запрос с фильтром по всем доступным отделам
+	query := `
 		DELETE FROM tasks
 		WHERE user_id IN (
 			SELECT id FROM users
-			WHERE department = ?
-		)
-	`, userDepartment)
+			WHERE department IN (`
+
+	args := make([]interface{}, len(departments))
+	for i, dept := range departments {
+		args[i] = dept
+		if i > 0 {
+			query += ", "
+		}
+		query += "?"
+	}
+	query += "))"
+
+	result, err := h.db.Exec(query, args...)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

@@ -4,7 +4,7 @@
 
 ## Быстрые ссылки
 
-**Версия:** 1.3.0  
+**Версия:** 2.1.0 ✨ (Multi-Department Manager Access)  
 **Стек:** Go + React + SQLite + Docker  
 
 **Содержание:**

@@ -3,6 +3,7 @@ package middleware
 import (
 	"database/sql"
 	"net/http"
+	"strconv"
 	"strings"
 	"task-management-backend/database"
 
@@ -72,6 +73,33 @@ func ManagerOrAdmin() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		c.Next()
+	}
+}
+
+// AdminOrSelf - разрешить админу видеть всё, или пользователю видеть только свои данные
+func AdminOrSelf() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get("userRole")
+		userID, _ := c.Get("userID")
+
+		// Админ может делать что угодно
+		if role == "admin" {
+			c.Next()
+			return
+		}
+
+		// Обычный пользователь может видеть только свои данные
+		requestedID := c.Param("id")
+		if requestedID != "" {
+			userIDStr := strconv.Itoa(userID.(int))
+			if requestedID != userIDStr {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+				c.Abort()
+				return
+			}
+		}
+
 		c.Next()
 	}
 }

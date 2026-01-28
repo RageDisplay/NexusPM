@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
+	"task-management-backend/database"
 	"task-management-backend/models"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,7 @@ func NewProjectHandler(db *sql.DB) *ProjectHandler {
 	return &ProjectHandler{db: db}
 }
 
-// GetProjects получить все проекты (для админа и менеджера видны все проекты)
+// GetProjects получить все проекты (менеджеры видят ВСЕ проекты и могут назначать сотрудников)
 func (h *ProjectHandler) GetProjects(c *gin.Context) {
 	userRole := c.GetString("userRole")
 
@@ -26,11 +27,13 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 		return
 	}
 
+	// Менеджеры и админы видят ВСЕ проекты
 	rows, err := h.db.Query(`
         SELECT id, name, description, created_by, department, created_at, updated_at
         FROM projects
         ORDER BY name
     `)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -167,11 +170,11 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 }
 
 // AssignProjectToUser назначить проект пользователю (для админа и менеджера)
-// Менеджер может назначать только сотрудников своего отдела на проекты любых отделов
+// Менеджер может назначать пользователей из всех доступных ему отделов на любые проекты
 // Админ может назначать кого угодно на любой проект
 func (h *ProjectHandler) AssignProjectToUser(c *gin.Context) {
+	userID := c.GetInt("userID")
 	userRole := c.GetString("userRole")
-	userDepartment := c.GetString("userDepartment")
 
 	if userRole != "admin" && userRole != "manager" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Недостаточно прав для назначения проектов"})
@@ -188,9 +191,9 @@ func (h *ProjectHandler) AssignProjectToUser(c *gin.Context) {
 		return
 	}
 
-	// Проверяем права менеджера и админа
+	// Проверяем права менеджера
 	if userRole == "manager" {
-		// Менеджер может назначать пользователей своего отдела (независимо от их роли)
+		// Менеджер может назначать пользователей только из доступных ему отделов
 		var targetUserDept sql.NullString
 		err := h.db.QueryRow("SELECT department FROM users WHERE id = ?", req.UserID).Scan(&targetUserDept)
 		if err != nil {
@@ -198,18 +201,32 @@ func (h *ProjectHandler) AssignProjectToUser(c *gin.Context) {
 			return
 		}
 
-		// Проверяем, что пользователь из того же отдела
 		targetDept := ""
 		if targetUserDept.Valid {
 			targetDept = targetUserDept.String
 		}
 
-		if targetDept != userDepartment {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете назначать проекты только пользователям своего отдела"})
+		// Получаем все доступные отделы менеджера
+		availableDepts, err := database.GetManagerDepartments(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Проверяем, что пользователь из одного из доступных отделов
+		isAllowed := false
+		for _, dept := range availableDepts {
+			if dept == targetDept {
+				isAllowed = true
+				break
+			}
+		}
+
+		if !isAllowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете назначать проекты только пользователям из доступных вам отделов"})
 			return
 		}
 	}
-	// Админ может назначать кого угодно на любой проект (без дополнительных проверок)
 
 	_, err := h.db.Exec(`
         INSERT OR IGNORE INTO user_projects (user_id, project_id)
@@ -231,11 +248,11 @@ func (h *ProjectHandler) AssignProjectToUser(c *gin.Context) {
 }
 
 // RemoveProjectFromUser удалить проект у пользователя (для админа и менеджера)
-// Менеджер может удалять только своих сотрудников со всех проектов
+// Менеджер может удалять проекты только у пользователей из доступных ему отделов
 // Админ может удалять кого угодно со всех проектов
 func (h *ProjectHandler) RemoveProjectFromUser(c *gin.Context) {
+	userID := c.GetInt("userID")
 	userRole := c.GetString("userRole")
-	userDepartment := c.GetString("userDepartment")
 
 	if userRole != "admin" && userRole != "manager" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Недостаточно прав для удаления проектов"})
@@ -252,9 +269,9 @@ func (h *ProjectHandler) RemoveProjectFromUser(c *gin.Context) {
 		return
 	}
 
-	// Проверяем права менеджера и админа
+	// Проверяем права менеджера
 	if userRole == "manager" {
-		// Менеджер может удалять проекты только у пользователей своего отдела
+		// Менеджер может удалять проекты только у пользователей из доступных ему отделов
 		var targetUserDept sql.NullString
 		err := h.db.QueryRow("SELECT department FROM users WHERE id = ?", req.UserID).Scan(&targetUserDept)
 		if err != nil {
@@ -262,18 +279,32 @@ func (h *ProjectHandler) RemoveProjectFromUser(c *gin.Context) {
 			return
 		}
 
-		// Проверяем, что пользователь из того же отдела
 		targetDept := ""
 		if targetUserDept.Valid {
 			targetDept = targetUserDept.String
 		}
 
-		if targetDept != userDepartment {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять проекты только у пользователей своего отдела"})
+		// Получаем все доступные отделы менеджера
+		availableDepts, err := database.GetManagerDepartments(h.db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Проверяем, что пользователь из одного из доступных отделов
+		isAllowed := false
+		for _, dept := range availableDepts {
+			if dept == targetDept {
+				isAllowed = true
+				break
+			}
+		}
+
+		if !isAllowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Вы можете удалять проекты только у пользователей из доступных вам отделов"})
 			return
 		}
 	}
-	// Админ может удалять кого угодно со любого проекта (без дополнительных проверок)
 
 	_, err := h.db.Exec(`
         DELETE FROM user_projects
