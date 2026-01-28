@@ -250,6 +250,9 @@ body {
   background-color: var(--card-bg);
   color: var(--text-primary);
   padding: 10px;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .form-group select option:checked {
@@ -638,7 +641,8 @@ body {
 }
 
 .task-form input,
-.task-form textarea {
+.task-form textarea,
+.task-form select {
   width: 100%;
   padding: 12px;
   margin: 8px 0;
@@ -651,12 +655,35 @@ body {
   box-sizing: border-box;
 }
 
+.task-form select {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,159,67,0.6)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 20px;
+  padding-right: 40px;
+}
+
+.task-form select option {
+  padding: 8px;
+  background-color: var(--card-bg);
+  color: var(--text-primary);
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
 .task-form .form-row .form-group textarea {
   min-height: 120px;
 }
 
 .task-form input:focus,
-.task-form textarea:focus {
+.task-form textarea:focus,
+.task-form select:focus {
   outline: none;
   border-color: var(--primary);
   background-color: rgba(0, 212, 170, 0.05);
@@ -982,6 +1009,9 @@ body {
   background-color: var(--card-bg);
   color: var(--text-primary);
   padding: 10px;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .users-table th {
@@ -1860,12 +1890,30 @@ button:disabled {
   font-size: 14px;
   background-color: var(--card-bg);
   color: var(--text-primary);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .assign-users-form select:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(255, 159, 67, 0.15);
+}
+
+.assign-users-form select option {
+  padding: 8px;
+  background-color: var(--card-bg);
+  color: var(--text-primary);
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.assign-users-form select option:checked {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: var(--dark-bg);
 }
 
 .btn-assign {
@@ -2044,6 +2092,9 @@ button:disabled {
   background-color: var(--card-bg);
   color: var(--text-primary);
   padding: 10px;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .ad-config-form .form-group select option:checked {
@@ -3298,6 +3349,11 @@ code, .badge-green { color: #ffd7b3; }
   font-size: 14px;
   cursor: pointer;
   transition: all 0.3s ease;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .filter-select:focus {
@@ -3307,6 +3363,20 @@ code, .badge-green { color: #ffd7b3; }
 
 .filter-select:hover {
   border-color: var(--primary);
+}
+
+.filter-select option {
+  padding: 8px;
+  background-color: var(--card-bg);
+  color: var(--text-primary);
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.filter-select option:checked {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: var(--dark-bg);
 }
 
 .results-info {
