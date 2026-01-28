@@ -26,6 +26,7 @@ const TaskManager = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterProject, setFilterProject] = useState('');
     const [filterStatus, setFilterStatus] = useState(''); // 'active', 'completed'
+    const [filterUser, setFilterUser] = useState(''); // Фильтр по ФИО сотрудника
     const [sortBy, setSortBy] = useState('date'); // 'date', 'progress', 'hours'
 
     useEffect(() => {
@@ -92,6 +93,25 @@ const TaskManager = () => {
             filtered = filtered.filter(task => task.progress < 100);
         } else if (filterStatus === 'completed') {
             filtered = filtered.filter(task => task.progress === 100);
+        }
+
+        // Фильтр по пользователю/сотруднику
+        if (filterUser) {
+            filtered = filtered.filter(task => {
+                // Ищем пользователя по введённому имени
+                const selectedUser = departmentUsers.find(u => {
+                    const userFullName = u.last_name && u.first_name 
+                        ? `${u.last_name} ${u.first_name}${u.patronymic ? ' ' + u.patronymic : ''}`
+                        : u.username;
+                    return userFullName === filterUser;
+                });
+                
+                // Если нашли пользователя, проверяем, что задача ему принадлежит
+                if (selectedUser) {
+                    return task.user_id === selectedUser.id;
+                }
+                return false;
+            });
         }
 
         // Сортировка
@@ -434,6 +454,29 @@ const TaskManager = () => {
                                 <option value="completed">Завершённые</option>
                             </select>
                         </div>
+
+                        {(user?.role === 'manager' || user?.role === 'admin') && departmentUsers.length > 0 && (
+                            <div className="filter-group">
+                                <label>Сотрудник:</label>
+                                <select
+                                    value={filterUser}
+                                    onChange={(e) => setFilterUser(e.target.value)}
+                                    className="filter-select"
+                                >
+                                    <option value="">Все сотрудники</option>
+                                    {departmentUsers.map(u => {
+                                        const fullName = u.last_name && u.first_name 
+                                            ? `${u.last_name} ${u.first_name}${u.patronymic ? ' ' + u.patronymic : ''}`
+                                            : u.username;
+                                        return (
+                                            <option key={u.id} value={fullName}>
+                                                {fullName}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
+                        )}
 
                         <div className="filter-group">
                             <label>Сортировка:</label>

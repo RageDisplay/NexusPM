@@ -68,6 +68,7 @@ type Task struct {
 	UserID       int       `json:"user_id"`
 	ProjectID    int       `json:"project_id"`
 	Username     string    `json:"username,omitempty"`
+	FullName     string    `json:"full_name,omitempty"`
 	Department   string    `json:"department,omitempty"`
 	ProjectName  string    `json:"project_name,omitempty"`
 	WeeklyInfo   string    `json:"weekly_info"`

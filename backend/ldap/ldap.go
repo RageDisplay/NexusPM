@@ -186,9 +186,12 @@ func (lm *LDAPManager) AuthenticateADUser(username, password string) (*LDAPUserI
 		return nil, fmt.Errorf("AD is not configured")
 	}
 
+	log.Printf("AuthenticateADUser: starting for user %s, directory_type=%s", username, config.DirectoryType)
+
 	// Подключаемся к LDAP серверу
 	conn, err := lm.dialLDAP(config)
 	if err != nil {
+		log.Printf("AuthenticateADUser: failed to dial LDAP: %v", err)
 		return nil, err
 	}
 	defer conn.Close()
@@ -196,11 +199,25 @@ func (lm *LDAPManager) AuthenticateADUser(username, password string) (*LDAPUserI
 	// Биндимся с сервисным аккаунтом для поиска пользователя
 	err = conn.Bind(config.BindDN, config.BindPassword)
 	if err != nil {
+		log.Printf("AuthenticateADUser: failed to bind to LDAP server: %v", err)
 		return nil, fmt.Errorf("failed to bind to LDAP server: %v", err)
 	}
 
 	// Ищем пользователя в LDAP
 	filter := fmt.Sprintf("(%s=%s)", config.UserNameAttr, ldap.EscapeFilter(username))
+	log.Printf("AuthenticateADUser: searching with filter=%s in base=%s", filter, config.UserSearchBase)
+
+	// Определяем атрибуты для извлечения в зависимости от типа директории
+	var attributes []string
+	attributes = append(attributes,
+		config.UserNameAttr,
+		config.EmailAttr,
+		config.DepartmentAttr,
+		"cn", "mail", "displayName",
+		"givenName", "sn", "surname", // Для Active Directory
+		"initials", // Иногда есть в AD
+	)
+
 	searchRequest := ldap.NewSearchRequest(
 		config.UserSearchBase,
 		ldap.ScopeWholeSubtree,
@@ -209,30 +226,37 @@ func (lm *LDAPManager) AuthenticateADUser(username, password string) (*LDAPUserI
 		0,
 		false,
 		filter,
-		[]string{config.UserNameAttr, config.EmailAttr, config.DepartmentAttr, "cn", "mail"},
+		attributes,
 		nil,
 	)
 
 	sr, err := conn.Search(searchRequest)
 	if err != nil {
+		log.Printf("AuthenticateADUser: failed to search LDAP: %v", err)
 		return nil, fmt.Errorf("failed to search LDAP: %v", err)
 	}
 
 	if len(sr.Entries) == 0 {
+		log.Printf("AuthenticateADUser: user %s not found in LDAP", username)
 		return nil, fmt.Errorf("user not found in LDAP")
 	}
 
 	if len(sr.Entries) > 1 {
+		log.Printf("AuthenticateADUser: multiple users found for %s", username)
 		return nil, fmt.Errorf("multiple users found in LDAP")
 	}
 
 	userEntry := sr.Entries[0]
 	userDN := userEntry.DN
 
+	log.Printf("AuthenticateADUser: found user DN=%s", userDN)
+	log.Printf("AuthenticateADUser: user attributes: %v", userEntry.Attributes)
+
 	// Закрываем старое соединение и подключаемся с учётными данными пользователя
 	conn.Close()
 	conn, err = lm.dialLDAP(config)
 	if err != nil {
+		log.Printf("AuthenticateADUser: failed to redial LDAP: %v", err)
 		return nil, err
 	}
 	defer conn.Close()
@@ -240,16 +264,38 @@ func (lm *LDAPManager) AuthenticateADUser(username, password string) (*LDAPUserI
 	// Пытаемся авторизоваться под пользователем
 	err = conn.Bind(userDN, password)
 	if err != nil {
+		log.Printf("AuthenticateADUser: invalid credentials for %s: %v", username, err)
 		return nil, fmt.Errorf("invalid credentials: %v", err)
 	}
 
+	log.Printf("AuthenticateADUser: successfully authenticated %s", username)
+
 	// Извлекаем информацию о пользователе
+	// Попробуем разные варианты атрибутов
+	firstName := userEntry.GetAttributeValue("givenName")
+	if firstName == "" {
+		firstName = userEntry.GetAttributeValue("name")
+	}
+
+	lastName := userEntry.GetAttributeValue("sn")
+	if lastName == "" {
+		lastName = userEntry.GetAttributeValue("surname")
+	}
+
+	// Если есть displayName, можем его распарсить
+	displayName := userEntry.GetAttributeValue("displayName")
+	if displayName != "" && (firstName == "" || lastName == "") {
+		log.Printf("AuthenticateADUser: using displayName=%s as fallback for names", displayName)
+		// displayName часто в формате "LastName FirstName" или "FirstName LastName"
+		// Оставим как есть, система может его использовать
+	}
+
 	userInfo := &LDAPUserInfo{
 		Username:   userEntry.GetAttributeValue(config.UserNameAttr),
 		Email:      userEntry.GetAttributeValue(config.EmailAttr),
 		Department: userEntry.GetAttributeValue(config.DepartmentAttr),
-		FirstName:  userEntry.GetAttributeValue("givenName"),
-		LastName:   userEntry.GetAttributeValue("sn"),
+		FirstName:  firstName,
+		LastName:   lastName,
 	}
 
 	if userInfo.Username == "" {
@@ -258,6 +304,9 @@ func (lm *LDAPManager) AuthenticateADUser(username, password string) (*LDAPUserI
 	if userInfo.Email == "" {
 		userInfo.Email = userEntry.GetAttributeValue("mail")
 	}
+
+	log.Printf("AuthenticateADUser: extracted info - username=%s, email=%s, dept=%s, firstName=%s, lastName=%s",
+		userInfo.Username, userInfo.Email, userInfo.Department, userInfo.FirstName, userInfo.LastName)
 
 	return userInfo, nil
 }
@@ -290,7 +339,7 @@ func (lm *LDAPManager) SyncADUsers() (int, error) {
 		0,
 		false,
 		filter,
-		[]string{config.UserNameAttr, config.EmailAttr, config.DepartmentAttr, "mail"},
+		[]string{config.UserNameAttr, config.EmailAttr, config.DepartmentAttr, "mail", "givenName", "sn", "surname", "displayName", "name"},
 		nil,
 	)
 
@@ -312,6 +361,16 @@ func (lm *LDAPManager) SyncADUsers() (int, error) {
 		}
 
 		department := entry.GetAttributeValue(config.DepartmentAttr)
+
+		// Извлекаем ФИО
+		firstName := entry.GetAttributeValue("givenName")
+		if firstName == "" {
+			firstName = entry.GetAttributeValue("name")
+		}
+		lastName := entry.GetAttributeValue("sn")
+		if lastName == "" {
+			lastName = entry.GetAttributeValue("surname")
+		}
 
 		// Проверяем, существует ли пользователь уже
 		var exists bool
@@ -342,9 +401,9 @@ func (lm *LDAPManager) SyncADUsers() (int, error) {
 			if department != "" || !currentDepartment.Valid || currentDepartment.String == "" {
 				_, err = lm.db.Exec(`
 					UPDATE users
-					SET department = ?, updated_at = ?
-					WHERE username = ? AND is_ad_user = 1
-				`, sql.NullString{String: department, Valid: department != ""}, time.Now(), username)
+				SET department = ?, first_name = ?, last_name = ?, updated_at = ?
+				WHERE username = ? AND is_ad_user = 1
+			`, sql.NullString{String: department, Valid: department != ""}, firstName, lastName, time.Now(), username)
 
 				if err != nil {
 					log.Printf("Error updating user %s: %v\n", username, err)
@@ -357,13 +416,16 @@ func (lm *LDAPManager) SyncADUsers() (int, error) {
 		} else {
 			// Создаём нового пользователя
 			_, err = lm.db.Exec(`
-				INSERT INTO users (username, password_hash, role, department, is_ad_user, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?)
+				INSERT INTO users (username, password_hash, role, department, first_name, last_name, patronymic, is_ad_user, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`,
 				username,
 				"",     // Пользователи AD не имеют локального пароля
 				"user", // По умолчанию роль "user"
 				sql.NullString{String: department, Valid: department != ""},
+				firstName,
+				lastName,
+				"", // patronymic обычно не заполняется при импорте из AD
 				true,
 				time.Now(),
 				time.Now(),

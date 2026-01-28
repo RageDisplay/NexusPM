@@ -30,7 +30,8 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 		rows, err = h.db.Query(`
             SELECT t.id, t.title, t.description, t.progress, t.hours_per_week, t.load_per_month, 
                    t.weekly_info, t.planning, t.help_needed, t.user_id, t.project_id, 
-                   t.created_at, t.updated_at, u.username, u.department, COALESCE(p.name, '') as project_name
+                   t.created_at, t.updated_at, u.username, u.department, COALESCE(p.name, '') as project_name,
+                   u.first_name, u.last_name, u.patronymic
             FROM tasks t 
             JOIN users u ON t.user_id = u.id 
             LEFT JOIN projects p ON t.project_id = p.id
@@ -40,7 +41,8 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 		rows, err = h.db.Query(`
             SELECT t.id, t.title, t.description, t.progress, t.hours_per_week, t.load_per_month, 
                    t.weekly_info, t.planning, t.help_needed, t.user_id, t.project_id, 
-                   t.created_at, t.updated_at, u.username, u.department, COALESCE(p.name, '') as project_name
+                   t.created_at, t.updated_at, u.username, u.department, COALESCE(p.name, '') as project_name,
+                   u.first_name, u.last_name, u.patronymic
             FROM tasks t 
             JOIN users u ON t.user_id = u.id 
             LEFT JOIN projects p ON t.project_id = p.id
@@ -51,7 +53,8 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 		rows, err = h.db.Query(`
             SELECT t.id, t.title, t.description, t.progress, t.hours_per_week, t.load_per_month, 
                    t.weekly_info, t.planning, t.help_needed, t.user_id, t.project_id, 
-                   t.created_at, t.updated_at, u.username, u.department, COALESCE(p.name, '') as project_name
+                   t.created_at, t.updated_at, u.username, u.department, COALESCE(p.name, '') as project_name,
+                   u.first_name, u.last_name, u.patronymic
             FROM tasks t 
             JOIN users u ON t.user_id = u.id 
             LEFT JOIN projects p ON t.project_id = p.id
@@ -72,17 +75,34 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 		var department sql.NullString
 		var projectID sql.NullInt64
 		var projectName string
+		var firstName, lastName, patronymic sql.NullString
 
 		err := rows.Scan(
 			&task.ID, &task.Title, &task.Description, &task.Progress,
 			&task.HoursPerWeek, &task.LoadPerMonth, &task.WeeklyInfo, &task.Planning,
 			&task.HelpNeeded, &task.UserID, &projectID, &task.CreatedAt, &task.UpdatedAt,
 			&task.Username, &department, &projectName,
+			&firstName, &lastName, &patronymic,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		// Собираем полное имя
+		fullName := ""
+		if lastName.Valid && firstName.Valid && lastName.String != "" && firstName.String != "" {
+			fullName = lastName.String + " " + firstName.String
+			if patronymic.Valid && patronymic.String != "" {
+				fullName += " " + patronymic.String
+			}
+		} else if lastName.Valid && lastName.String != "" {
+			fullName = lastName.String
+		} else if firstName.Valid && firstName.String != "" {
+			fullName = firstName.String
+		}
+
+		task.FullName = fullName
 
 		if department.Valid {
 			task.Department = department.String

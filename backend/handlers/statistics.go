@@ -65,17 +65,17 @@ func (h *StatisticsHandler) GetDepartmentStatistics(c *gin.Context) {
 	if userRole == "admin" {
 		// Админ видит всех пользователей
 		rows, err = h.db.Query(`
-			SELECT DISTINCT u.id, u.username, u.role, u.department
+			SELECT DISTINCT u.id, u.username, u.role, u.department, u.first_name, u.last_name, u.patronymic
 			FROM users u
-			ORDER BY u.department, u.username
+			ORDER BY u.department, u.last_name, u.first_name
 		`)
 	} else {
 		// Менеджер видит только пользователей своего отдела
 		rows, err = h.db.Query(`
-			SELECT DISTINCT u.id, u.username, u.role, u.department
+			SELECT DISTINCT u.id, u.username, u.role, u.department, u.first_name, u.last_name, u.patronymic
 			FROM users u
 			WHERE u.department = ?
-			ORDER BY u.username
+			ORDER BY u.last_name, u.first_name
 		`, userDepartment)
 	}
 
@@ -90,8 +90,9 @@ func (h *StatisticsHandler) GetDepartmentStatistics(c *gin.Context) {
 	for rows.Next() {
 		var emp EmployeeStatistics
 		var dept sql.NullString
+		var firstName, lastName, patronymic sql.NullString
 
-		err := rows.Scan(&emp.ID, &emp.Username, &emp.Role, &dept)
+		err := rows.Scan(&emp.ID, &emp.Username, &emp.Role, &dept, &firstName, &lastName, &patronymic)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -99,6 +100,18 @@ func (h *StatisticsHandler) GetDepartmentStatistics(c *gin.Context) {
 
 		if dept.Valid {
 			emp.Department = dept.String
+		}
+
+		// Формируем ФИО и сохраняем в Username для отправки на фронт
+		fullName := ""
+		if lastName.Valid && lastName.String != "" && firstName.Valid && firstName.String != "" {
+			fullName = lastName.String + " " + firstName.String
+			if patronymic.Valid && patronymic.String != "" {
+				fullName += " " + patronymic.String
+			}
+		}
+		if fullName != "" {
+			emp.Username = fullName
 		}
 
 		// Получаем статистику по задачам для этого пользователя

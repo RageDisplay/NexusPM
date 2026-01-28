@@ -167,6 +167,9 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 		return nil, "", err
 	}
 
+	log.Printf("loginAD: LDAP authentication successful for %s, got info: firstName=%s, lastName=%s, dept=%s",
+		username, userInfo.FirstName, userInfo.LastName, userInfo.Department)
+
 	// Проверяем, существует ли пользователь в нашей БД
 	var user models.User
 	var firstName, lastName, patronymic sql.NullString
@@ -178,6 +181,7 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 
 	if err == sql.ErrNoRows {
 		// Пользователя нет в БД, создаём его
+		log.Printf("loginAD: user %s not found in DB, creating new user", username)
 		result, err := h.db.Exec(`
 			INSERT INTO users (username, password_hash, role, department, first_name, last_name, patronymic, is_ad_user, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -195,6 +199,7 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 		)
 
 		if err != nil {
+			log.Printf("loginAD: failed to insert new user %s: %v", username, err)
 			return nil, "", err
 		}
 
@@ -207,9 +212,36 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 		user.FirstName = userInfo.FirstName
 		user.LastName = userInfo.LastName
 		user.Patronymic = ""
+
+		log.Printf("loginAD: created new user %s with id %d, firstName=%s, lastName=%s",
+			username, userID, userInfo.FirstName, userInfo.LastName)
+
+		// Перечитываем новопо пользователя из БД, чтобы получить актуальные значения
+		var dept, fname, lname, pname sql.NullString
+		err = h.db.QueryRow(
+			"SELECT id, username, role, department, is_ad_user, first_name, last_name, patronymic FROM users WHERE id = ?",
+			user.ID,
+		).Scan(&user.ID, &user.Username, &user.Role, &dept, &user.IsADUser, &fname, &lname, &pname)
+
+		if err == nil {
+			if dept.Valid {
+				user.Department = dept
+			}
+			if fname.Valid {
+				user.FirstName = fname.String
+			}
+			if lname.Valid {
+				user.LastName = lname.String
+			}
+			if pname.Valid {
+				user.Patronymic = pname.String
+			}
+		}
 	} else if err != nil {
+		log.Printf("loginAD: error querying user %s: %v", username, err)
 		return nil, "", err
 	} else {
+		log.Printf("loginAD: user %s found in DB, updating from LDAP info", username)
 		// Конвертируем NullString в обычные строки
 		if firstName.Valid {
 			user.FirstName = firstName.String
@@ -224,16 +256,71 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 
 	// Обновляем отдел и ФИО из AD
 	if userInfo.Department != "" || userInfo.FirstName != "" || userInfo.LastName != "" {
-		_, _ = h.db.Exec(
-			"UPDATE users SET department = ?, first_name = ?, last_name = ? WHERE id = ?",
-			userInfo.Department,
-			userInfo.FirstName,
-			userInfo.LastName,
+		log.Printf("loginAD: updating user %s with LDAP info: firstName=%s, lastName=%s, dept=%s",
+			username, userInfo.FirstName, userInfo.LastName, userInfo.Department)
+
+		// Если department пусто в LDAP, не перезаписываем существующий department в БД
+		if userInfo.Department == "" {
+			// Если department пусто в LDAP, обновляем только ФИО
+			result, err := h.db.Exec(
+				"UPDATE users SET first_name = ?, last_name = ? WHERE id = ?",
+				userInfo.FirstName,
+				userInfo.LastName,
+				user.ID,
+			)
+
+			if err != nil {
+				log.Printf("loginAD: error updating user %s: %v", username, err)
+				return nil, "", err
+			}
+
+			rowsAffected, _ := result.RowsAffected()
+			log.Printf("loginAD: updated %d rows for user %s (ФИО only)", rowsAffected, username)
+		} else {
+			// Если department заполнен в LDAP, обновляем все
+			result, err := h.db.Exec(
+				"UPDATE users SET department = ?, first_name = ?, last_name = ? WHERE id = ?",
+				userInfo.Department,
+				userInfo.FirstName,
+				userInfo.LastName,
+				user.ID,
+			)
+
+			if err != nil {
+				log.Printf("loginAD: error updating user %s: %v", username, err)
+				return nil, "", err
+			}
+
+			rowsAffected, _ := result.RowsAffected()
+			log.Printf("loginAD: updated %d rows for user %s", rowsAffected, username)
+		}
+
+		// Перечитываем user из БД, чтобы получить актуальные значения
+		var dept, fname, lname, pname sql.NullString
+		err = h.db.QueryRow(
+			"SELECT id, username, role, department, is_ad_user, first_name, last_name, patronymic FROM users WHERE id = ?",
 			user.ID,
-		)
-		user.Department = sql.NullString{String: userInfo.Department, Valid: userInfo.Department != ""}
-		user.FirstName = userInfo.FirstName
-		user.LastName = userInfo.LastName
+		).Scan(&user.ID, &user.Username, &user.Role, &dept, &user.IsADUser, &fname, &lname, &pname)
+
+		if err != nil {
+			log.Printf("loginAD: error re-reading user %s from DB: %v", username, err)
+			// Не критично, используем то, что установили вручную
+		} else {
+			if dept.Valid {
+				user.Department = dept
+			}
+			if fname.Valid {
+				user.FirstName = fname.String
+			}
+			if lname.Valid {
+				user.LastName = lname.String
+			}
+			if pname.Valid {
+				user.Patronymic = pname.String
+			}
+			log.Printf("loginAD: re-read user %s from DB: dept=%s, firstName=%s, lastName=%s",
+				username, user.Department.String, user.FirstName, user.LastName)
+		}
 	}
 
 	departmentStr := ""
@@ -244,9 +331,11 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 	// Генерируем JWT
 	token, err := database.GenerateJWT(user.ID, user.Username, user.Role, departmentStr)
 	if err != nil {
+		log.Printf("loginAD: failed to generate JWT for user %s: %v", username, err)
 		return nil, "", err
 	}
 
+	log.Printf("loginAD: successfully authenticated user %s", username)
 	return &user, token, nil
 }
 
@@ -311,6 +400,9 @@ func (h *AuthHandler) returnLoginResponse(c *gin.Context, user *models.User, tok
 		department = user.Department.String
 	}
 
+	log.Printf("returnLoginResponse: preparing response for user %s with firstName=%s, lastName=%s, patronymic=%s",
+		user.Username, user.FirstName, user.LastName, user.Patronymic)
+
 	responseUser := gin.H{
 		"id":                      user.ID,
 		"username":                user.Username,
@@ -322,6 +414,8 @@ func (h *AuthHandler) returnLoginResponse(c *gin.Context, user *models.User, tok
 		"last_name":               user.LastName,
 		"patronymic":              user.Patronymic,
 	}
+
+	log.Printf("returnLoginResponse: sending response user object: %+v", responseUser)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Авторизация успешна",
