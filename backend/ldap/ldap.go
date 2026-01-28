@@ -287,7 +287,6 @@ func (lm *LDAPManager) AuthenticateADUser(username, password string) (*LDAPUserI
 	if displayName != "" && (firstName == "" || lastName == "") {
 		log.Printf("AuthenticateADUser: using displayName=%s as fallback for names", displayName)
 		// displayName часто в формате "LastName FirstName" или "FirstName LastName"
-		// Оставим как есть, система может его использовать
 	}
 
 	userInfo := &LDAPUserInfo{
