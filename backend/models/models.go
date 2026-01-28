@@ -11,6 +11,9 @@ type User struct {
 	PasswordHash          string         `json:"-"`
 	Role                  string         `json:"role"`
 	Department            sql.NullString `json:"department"`
+	FirstName             string         `json:"first_name"`
+	LastName              string         `json:"last_name"`
+	Patronymic            string         `json:"patronymic"`
 	CreatedAt             time.Time      `json:"created_at"`
 	ADUserID              sql.NullString `json:"ad_user_id"` // ID пользователя в AD
 	IsADUser              bool           `json:"is_ad_user"` // Флаг, что это пользователь из AD
@@ -80,6 +83,10 @@ type LoginRequest struct {
 }
 
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username   string `json:"username" binding:"required"`
+	Password   string `json:"password" binding:"required"`
+	Department string `json:"department" binding:"required"`
+	FirstName  string `json:"first_name" binding:"required"`
+	LastName   string `json:"last_name" binding:"required"`
+	Patronymic string `json:"patronymic"`
 }

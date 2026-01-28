@@ -74,6 +74,10 @@ func main() {
 		api.POST("/auth/logout", authHandler.Logout)
 		api.POST("/users/:id/reset-password", middleware.AdminOnly(), authHandler.ResetPassword)
 
+		// Профиль пользователя
+		api.GET("/users/profile", dashboardHandler.GetUserProfile)
+		api.PUT("/users/profile", dashboardHandler.UpdateUserProfile)
+
 		// Задачи
 		api.GET("/tasks", taskHandler.GetTasks)
 		api.POST("/tasks", taskHandler.CreateTask)

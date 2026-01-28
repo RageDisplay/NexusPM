@@ -8,7 +8,10 @@ const UserProfile = () => {
     const [formData, setFormData] = useState({
         username: '',
         department: '',
-        role: ''
+        role: '',
+        firstName: '',
+        lastName: '',
+        patronymic: ''
     });
     const [passwordData, setPasswordData] = useState({
         oldPassword: '',
@@ -24,7 +27,10 @@ const UserProfile = () => {
             setFormData({
                 username: user.username || '',
                 department: user.department || '',
-                role: user.role || ''
+                role: user.role || '',
+                firstName: user.first_name || '',
+                lastName: user.last_name || '',
+                patronymic: user.patronymic || ''
             });
         }
     }, [user]);
@@ -61,6 +67,34 @@ const UserProfile = () => {
             setTimeout(() => setMessage(''), 3000);
         } catch (error) {
             setMessage('Ошибка обновления отдела: ' + (error.response?.data?.error || error.message));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdateProfile = async () => {
+        if (!formData.firstName.trim()) {
+            setMessage('Имя не может быть пустым');
+            return;
+        }
+        if (!formData.lastName.trim()) {
+            setMessage('Фамилия не может быть пустой');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await api.put('/api/users/profile', {
+                first_name: formData.firstName.trim(),
+                last_name: formData.lastName.trim(),
+                patronymic: formData.patronymic.trim()
+            });
+            setMessage('Профиль успешно обновлён');
+            await refreshUser();
+            setIsEditing(false);
+            setTimeout(() => setMessage(''), 3000);
+        } catch (error) {
+            setMessage('Ошибка обновления профиля: ' + (error.response?.data?.error || error.message));
         } finally {
             setLoading(false);
         }
@@ -136,6 +170,42 @@ const UserProfile = () => {
                     </div>
 
                     <div className="profile-field">
+                        <label>Имя:</label>
+                        <input 
+                            type="text" 
+                            name="firstName"
+                            value={formData.firstName}
+                            onChange={handleInputChange}
+                            disabled={!isEditing}
+                            className={isEditing ? '' : 'disabled-field'}
+                        />
+                    </div>
+
+                    <div className="profile-field">
+                        <label>Фамилия:</label>
+                        <input 
+                            type="text" 
+                            name="lastName"
+                            value={formData.lastName}
+                            onChange={handleInputChange}
+                            disabled={!isEditing}
+                            className={isEditing ? '' : 'disabled-field'}
+                        />
+                    </div>
+
+                    <div className="profile-field">
+                        <label>Отчество:</label>
+                        <input 
+                            type="text" 
+                            name="patronymic"
+                            value={formData.patronymic}
+                            onChange={handleInputChange}
+                            disabled={!isEditing}
+                            className={isEditing ? '' : 'disabled-field'}
+                        />
+                    </div>
+
+                    <div className="profile-field">
                         <label>Отдел:</label>
                         <input 
                             type="text" 
@@ -153,7 +223,7 @@ const UserProfile = () => {
                         <>
                             <button 
                                 className="btn btn-primary"
-                                onClick={handleUpdateDepartment}
+                                onClick={handleUpdateProfile}
                                 disabled={loading}
                             >
                                 {loading ? 'Сохранение...' : 'Сохранить'}

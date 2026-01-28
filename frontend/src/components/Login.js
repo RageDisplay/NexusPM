@@ -23,7 +23,10 @@ const Login = () => {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    department: ''
+    department: '',
+    firstName: '',
+    lastName: '',
+    patronymic: ''
   });
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -131,9 +134,19 @@ const Login = () => {
       setError('Пожалуйста, введите пароль');
       return;
     }
-    if (!isLogin && !formData.department) {
-      setError('Пожалуйста, выберите отдел');
-      return;
+    if (!isLogin) {
+      if (!formData.firstName.trim()) {
+        setError('Пожалуйста, введите имя');
+        return;
+      }
+      if (!formData.lastName.trim()) {
+        setError('Пожалуйста, введите фамилию');
+        return;
+      }
+      if (!formData.department) {
+        setError('Пожалуйста, выберите отдел');
+        return;
+      }
     }
 
     setError('');
@@ -141,7 +154,18 @@ const Login = () => {
 
     try {
       const endpoint = isLogin ? '/api/login' : '/api/register';
-      const payload = { ...formData };
+      const payload = { 
+        username: formData.username,
+        password: formData.password,
+      };
+      
+      // Добавляем поля регистрации
+      if (!isLogin) {
+        payload.first_name = formData.firstName.trim();
+        payload.last_name = formData.lastName.trim();
+        payload.patronymic = formData.patronymic.trim();
+        payload.department = formData.department;
+      }
       
       // Если это логин, добавляем тип аутентификации
       if (isLogin) {
@@ -338,6 +362,44 @@ const Login = () => {
             </button>
         </div>
       </div>
+        
+        {/* Поля ФИО только для регистрации */}
+        {!isLogin && (
+          <>
+            <div className="form-group">
+              <label>Имя</label>
+              <input
+                type="text"
+                value={formData.firstName}
+                onChange={(e) => handleInputChange(e, 'firstName')}
+                disabled={isLoading}
+                required
+                maxLength="100"
+              />
+            </div>
+            <div className="form-group">
+              <label>Фамилия</label>
+              <input
+                type="text"
+                value={formData.lastName}
+                onChange={(e) => handleInputChange(e, 'lastName')}
+                disabled={isLoading}
+                required
+                maxLength="100"
+              />
+            </div>
+            <div className="form-group">
+              <label>Отчество (необязательно)</label>
+              <input
+                type="text"
+                value={formData.patronymic}
+                onChange={(e) => handleInputChange(e, 'patronymic')}
+                disabled={isLoading}
+                maxLength="100"
+              />
+            </div>
+          </>
+        )}
         
         {/* Поле отдела только для регистрации */}
         {!isLogin && (

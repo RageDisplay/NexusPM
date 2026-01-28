@@ -303,3 +303,99 @@ func CreateNotification(db *sql.DB, userID int, notificationType, title, message
 	`, userID, notificationType, title, message, relatedID)
 	return err
 }
+
+// UpdateUserProfile обновляет профиль пользователя (имя, фамилия, отчество)
+func (h *DashboardHandler) UpdateUserProfile(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Не авторизован"})
+		return
+	}
+
+	var req struct {
+		FirstName  string `json:"first_name" binding:"required"`
+		LastName   string `json:"last_name" binding:"required"`
+		Patronymic string `json:"patronymic"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Обновляем профиль в БД
+	result, err := h.db.Exec(
+		"UPDATE users SET first_name = ?, last_name = ?, patronymic = ?, updated_at = ? WHERE id = ?",
+		req.FirstName, req.LastName, req.Patronymic, time.Now(), userID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка обновления профиля"})
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil || rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь не найден"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Профиль успешно обновлен",
+		"user": gin.H{
+			"first_name": req.FirstName,
+			"last_name":  req.LastName,
+			"patronymic": req.Patronymic,
+		},
+	})
+}
+
+// GetUserProfile возвращает профиль текущего пользователя
+func (h *DashboardHandler) GetUserProfile(c *gin.Context) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Не авторизован"})
+		return
+	}
+
+	var user struct {
+		ID         int
+		Username   string
+		FirstName  string
+		LastName   string
+		Patronymic string
+		Role       string
+		Department sql.NullString
+		IsADUser   bool
+	}
+
+	err := h.db.QueryRow(
+		"SELECT id, username, first_name, last_name, patronymic, role, department, is_ad_user FROM users WHERE id = ?",
+		userID,
+	).Scan(&user.ID, &user.Username, &user.FirstName, &user.LastName, &user.Patronymic, &user.Role, &user.Department, &user.IsADUser)
+
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Пользователь не найден"})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении профиля"})
+		return
+	}
+
+	department := ""
+	if user.Department.Valid {
+		department = user.Department.String
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":         user.ID,
+			"username":   user.Username,
+			"first_name": user.FirstName,
+			"last_name":  user.LastName,
+			"patronymic": user.Patronymic,
+			"role":       user.Role,
+			"department": department,
+			"is_ad_user": user.IsADUser,
+		},
+	})
+}

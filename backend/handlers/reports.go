@@ -144,7 +144,7 @@ func (h *ReportHandler) ExportDepartmentTasks(c *gin.Context) {
 	endDateStr := c.Query("end_date")
 
 	query := `
-        SELECT ROW_NUMBER() OVER (ORDER BY t.created_at) as row_num, u.username, t.title, t.weekly_info, t.planning, t.help_needed, t.hours_per_week, t.load_per_month
+        SELECT ROW_NUMBER() OVER (ORDER BY t.created_at) as row_num, u.first_name, u.last_name, u.patronymic, t.title, t.weekly_info, t.planning, t.help_needed, t.hours_per_week, t.load_per_month
         FROM tasks t 
         JOIN users u ON t.user_id = u.id 
         WHERE u.department = ?`
@@ -185,17 +185,23 @@ func (h *ReportHandler) ExportDepartmentTasks(c *gin.Context) {
 	rowIndex := 2
 	for rows.Next() {
 		var rowNum int
-		var username, title, weeklyInfo, planning, helpNeeded string
+		var firstName, lastName, patronymic, title, weeklyInfo, planning, helpNeeded string
 		var hoursPerWeek float64
 		var loadPerMonth int
 
-		err := rows.Scan(&rowNum, &username, &title, &weeklyInfo, &planning, &helpNeeded, &hoursPerWeek, &loadPerMonth)
+		err := rows.Scan(&rowNum, &firstName, &lastName, &patronymic, &title, &weeklyInfo, &planning, &helpNeeded, &hoursPerWeek, &loadPerMonth)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		data := []interface{}{rowNum, username, title, weeklyInfo, planning, helpNeeded, hoursPerWeek, loadPerMonth}
+		// Форматируем ФИО в одну ячейку
+		fullName := fmt.Sprintf("%s %s", lastName, firstName)
+		if patronymic != "" {
+			fullName += " " + patronymic
+		}
+
+		data := []interface{}{rowNum, fullName, title, weeklyInfo, planning, helpNeeded, hoursPerWeek, loadPerMonth}
 		for i, value := range data {
 			cell, _ := excelize.CoordinatesToCellName(i+1, rowIndex)
 			f.SetCellValue(sheet, cell, value)
@@ -250,7 +256,7 @@ func (h *ReportHandler) ExportAllTasks(c *gin.Context) {
 	endDateStr := c.Query("end_date")
 
 	query := `
-        SELECT ROW_NUMBER() OVER (ORDER BY t.created_at) as row_num, u.username, t.title, t.weekly_info, t.planning, t.help_needed, t.hours_per_week, t.load_per_month
+        SELECT ROW_NUMBER() OVER (ORDER BY t.created_at) as row_num, u.first_name, u.last_name, u.patronymic, t.title, t.weekly_info, t.planning, t.help_needed, t.hours_per_week, t.load_per_month
         FROM tasks t 
         JOIN users u ON t.user_id = u.id`
 
@@ -290,17 +296,23 @@ func (h *ReportHandler) ExportAllTasks(c *gin.Context) {
 	rowIndex := 2
 	for rows.Next() {
 		var rowNum int
-		var username, title, weeklyInfo, planning, helpNeeded string
+		var firstName, lastName, patronymic, title, weeklyInfo, planning, helpNeeded string
 		var hoursPerWeek float64
 		var loadPerMonth int
 
-		err := rows.Scan(&rowNum, &username, &title, &weeklyInfo, &planning, &helpNeeded, &hoursPerWeek, &loadPerMonth)
+		err := rows.Scan(&rowNum, &firstName, &lastName, &patronymic, &title, &weeklyInfo, &planning, &helpNeeded, &hoursPerWeek, &loadPerMonth)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		data := []interface{}{rowNum, username, title, weeklyInfo, planning, helpNeeded, hoursPerWeek, loadPerMonth}
+		// Форматируем ФИО в одну ячейку
+		fullName := fmt.Sprintf("%s %s", lastName, firstName)
+		if patronymic != "" {
+			fullName += " " + patronymic
+		}
+
+		data := []interface{}{rowNum, fullName, title, weeklyInfo, planning, helpNeeded, hoursPerWeek, loadPerMonth}
 		for i, value := range data {
 			cell, _ := excelize.CoordinatesToCellName(i+1, rowIndex)
 			f.SetCellValue(sheet, cell, value)

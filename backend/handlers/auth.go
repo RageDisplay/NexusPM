@@ -28,11 +28,7 @@ func NewAuthHandler(db *sql.DB) *AuthHandler {
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
-	var req struct {
-		Username   string `json:"username" binding:"required"`
-		Password   string `json:"password" binding:"required"`
-		Department string `json:"department" binding:"required"`
-	}
+	var req models.RegisterRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.Printf("Register error - JSON bind failed: %v", err)
@@ -40,7 +36,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Register attempt: username=%s, department=%s", req.Username, req.Department)
+	log.Printf("Register attempt: username=%s, department=%s, firstName=%s, lastName=%s",
+		req.Username, req.Department, req.FirstName, req.LastName)
 
 	// Проверка существования пользователя
 	var exists bool
@@ -48,6 +45,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	if err == nil {
 		log.Printf("Register failed: user %s already exists", req.Username)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Такой пользователь уже существует"})
+		return
+	}
+
+	// Валидация ФИО (первое имя и фамилия обязательны)
+	if req.FirstName == "" || req.LastName == "" {
+		log.Printf("Register failed: empty first_name or last_name for user %s", req.Username)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Имя и фамилия обязательны"})
 		return
 	}
 
@@ -61,8 +65,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	// Создание пользователя
 	result, err := h.db.Exec(
-		"INSERT INTO users (username, password_hash, role, department, is_ad_user, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		req.Username, hashedPassword, "user", req.Department, false, time.Now(), time.Now(),
+		"INSERT INTO users (username, password_hash, role, department, first_name, last_name, patronymic, is_ad_user, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		req.Username, hashedPassword, "user", req.Department, req.FirstName, req.LastName, req.Patronymic, false, time.Now(), time.Now(),
 	)
 	if err != nil {
 		log.Printf("Register error: failed to insert user %s: %v", req.Username, err)
@@ -90,6 +94,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			"username":   req.Username,
 			"role":       "user",
 			"department": req.Department,
+			"first_name": req.FirstName,
+			"last_name":  req.LastName,
+			"patronymic": req.Patronymic,
 		},
 	})
 }
@@ -162,22 +169,26 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 
 	// Проверяем, существует ли пользователь в нашей БД
 	var user models.User
+	var firstName, lastName, patronymic sql.NullString
 
 	err = h.db.QueryRow(
-		"SELECT id, username, role, department, is_ad_user FROM users WHERE username = ? AND is_ad_user = 1",
+		"SELECT id, username, role, department, is_ad_user, first_name, last_name, patronymic FROM users WHERE username = ? AND is_ad_user = 1",
 		username,
-	).Scan(&user.ID, &user.Username, &user.Role, &user.Department, &user.IsADUser)
+	).Scan(&user.ID, &user.Username, &user.Role, &user.Department, &user.IsADUser, &firstName, &lastName, &patronymic)
 
 	if err == sql.ErrNoRows {
 		// Пользователя нет в БД, создаём его
 		result, err := h.db.Exec(`
-			INSERT INTO users (username, password_hash, role, department, is_ad_user, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO users (username, password_hash, role, department, first_name, last_name, patronymic, is_ad_user, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
 			username,
 			"", // У доменных пользователей нет локального пароля
 			"user",
 			sql.NullString{String: userInfo.Department, Valid: userInfo.Department != ""},
+			userInfo.FirstName,
+			userInfo.LastName,
+			"",
 			true,
 			time.Now(),
 			time.Now(),
@@ -193,18 +204,36 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 		user.Role = "user"
 		user.IsADUser = true
 		user.Department = sql.NullString{String: userInfo.Department, Valid: userInfo.Department != ""}
+		user.FirstName = userInfo.FirstName
+		user.LastName = userInfo.LastName
+		user.Patronymic = ""
 	} else if err != nil {
 		return nil, "", err
+	} else {
+		// Конвертируем NullString в обычные строки
+		if firstName.Valid {
+			user.FirstName = firstName.String
+		}
+		if lastName.Valid {
+			user.LastName = lastName.String
+		}
+		if patronymic.Valid {
+			user.Patronymic = patronymic.String
+		}
 	}
 
-	// Обновляем отдел
-	if userInfo.Department != "" {
+	// Обновляем отдел и ФИО из AD
+	if userInfo.Department != "" || userInfo.FirstName != "" || userInfo.LastName != "" {
 		_, _ = h.db.Exec(
-			"UPDATE users SET department = ? WHERE id = ?",
+			"UPDATE users SET department = ?, first_name = ?, last_name = ? WHERE id = ?",
 			userInfo.Department,
+			userInfo.FirstName,
+			userInfo.LastName,
 			user.ID,
 		)
-		user.Department = sql.NullString{String: userInfo.Department, Valid: true}
+		user.Department = sql.NullString{String: userInfo.Department, Valid: userInfo.Department != ""}
+		user.FirstName = userInfo.FirstName
+		user.LastName = userInfo.LastName
 	}
 
 	departmentStr := ""
@@ -223,13 +252,14 @@ func (h *AuthHandler) loginAD(username, password string) (*models.User, string, 
 
 func (h *AuthHandler) loginLocal(username, password string) (*models.User, string, error) {
 	var user models.User
+	var firstName, lastName, patronymic sql.NullString
 
 	log.Printf("loginLocal: querying for local user %s", username)
 
 	err := h.db.QueryRow(
-		"SELECT id, username, password_hash, role, department, is_ad_user, password_reset_required FROM users WHERE username = ? AND is_ad_user = 0",
+		"SELECT id, username, password_hash, role, department, is_ad_user, password_reset_required, first_name, last_name, patronymic FROM users WHERE username = ? AND is_ad_user = 0",
 		username,
-	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Role, &user.Department, &user.IsADUser, &user.PasswordResetRequired)
+	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Role, &user.Department, &user.IsADUser, &user.PasswordResetRequired, &firstName, &lastName, &patronymic)
 
 	if err == sql.ErrNoRows {
 		log.Printf("loginLocal: user %s not found in local database", username)
@@ -237,6 +267,17 @@ func (h *AuthHandler) loginLocal(username, password string) (*models.User, strin
 	} else if err != nil {
 		log.Printf("loginLocal: database error for user %s: %v", username, err)
 		return nil, "", err
+	}
+
+	// Конвертируем NullString в обычные строки
+	if firstName.Valid {
+		user.FirstName = firstName.String
+	}
+	if lastName.Valid {
+		user.LastName = lastName.String
+	}
+	if patronymic.Valid {
+		user.Patronymic = patronymic.String
 	}
 
 	log.Printf("loginLocal: user %s found, checking password", username)
@@ -277,6 +318,9 @@ func (h *AuthHandler) returnLoginResponse(c *gin.Context, user *models.User, tok
 		"department":              department,
 		"is_ad_user":              user.IsADUser,
 		"password_reset_required": user.PasswordResetRequired,
+		"first_name":              user.FirstName,
+		"last_name":               user.LastName,
+		"patronymic":              user.Patronymic,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -341,17 +385,29 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 	}
 
 	var user models.User
+	var firstName, lastName, patronymic sql.NullString
 
 	err := h.db.QueryRow(`
-		SELECT id, username, role, department, is_ad_user, password_reset_required, created_at
+		SELECT id, username, role, department, is_ad_user, password_reset_required, first_name, last_name, patronymic, created_at
 		FROM users
 		WHERE id = ?
-	`, userID).Scan(&user.ID, &user.Username, &user.Role, &user.Department, &user.IsADUser, &user.PasswordResetRequired, &user.CreatedAt)
+	`, userID).Scan(&user.ID, &user.Username, &user.Role, &user.Department, &user.IsADUser, &user.PasswordResetRequired, &firstName, &lastName, &patronymic, &user.CreatedAt)
 
 	if err != nil {
 		log.Printf("GetProfile error: failed to get user %d: %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении профиля"})
 		return
+	}
+
+	// Конвертируем NullString в обычные строки
+	if firstName.Valid {
+		user.FirstName = firstName.String
+	}
+	if lastName.Valid {
+		user.LastName = lastName.String
+	}
+	if patronymic.Valid {
+		user.Patronymic = patronymic.String
 	}
 
 	department := ""
@@ -366,6 +422,9 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 		"department":              department,
 		"is_ad_user":              user.IsADUser,
 		"password_reset_required": user.PasswordResetRequired,
+		"first_name":              user.FirstName,
+		"last_name":               user.LastName,
+		"patronymic":              user.Patronymic,
 		"created_at":              user.CreatedAt,
 	})
 }

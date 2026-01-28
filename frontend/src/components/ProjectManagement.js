@@ -170,12 +170,14 @@ const ProjectManagement = () => {
                         placeholder="Название проекта"
                         value={newProject.name}
                         onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                        maxLength="255"
                         disabled={loading}
                     />
                     <textarea
                         placeholder="Описание проекта (детали, требования, ожидаемые результаты)"
                         value={newProject.description}
                         onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                        maxLength="2000"
                         disabled={loading}
                     />
                     <button className="btn btn-primary" type="submit" disabled={loading}>
