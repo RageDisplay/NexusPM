@@ -503,3 +503,62 @@ func (h *TaskHandler) DuplicateTask(c *gin.Context) {
 		"task":    newTask,
 	})
 }
+
+func (h *TaskHandler) GetLastTaskByProjectAndUser(c *gin.Context) {
+	userID := c.GetInt("userID")
+	projectID, _ := strconv.Atoi(c.Param("projectId"))
+
+	var task models.Task
+	var department sql.NullString
+	var firstName, lastName, patronymic sql.NullString
+
+	err := h.db.QueryRow(`
+		SELECT t.id, t.title, t.description, t.progress, t.hours_per_week, t.load_per_month, 
+		       t.weekly_info, t.planning, t.help_needed, t.user_id, t.project_id, 
+		       t.created_at, t.updated_at, u.username, u.department, COALESCE(p.name, '') as project_name,
+		       u.first_name, u.last_name, u.patronymic
+		FROM tasks t 
+		JOIN users u ON t.user_id = u.id 
+		LEFT JOIN projects p ON t.project_id = p.id
+		WHERE t.project_id = ? AND t.user_id = ?
+		ORDER BY t.updated_at DESC
+		LIMIT 1
+	`, projectID, userID).Scan(
+		&task.ID, &task.Title, &task.Description, &task.Progress,
+		&task.HoursPerWeek, &task.LoadPerMonth, &task.WeeklyInfo, &task.Planning,
+		&task.HelpNeeded, &task.UserID, &task.ProjectID, &task.CreatedAt, &task.UpdatedAt,
+		&task.Username, &department, &task.ProjectName,
+		&firstName, &lastName, &patronymic,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Нет предыдущих задач для этого проекта и пользователя
+			c.JSON(http.StatusNotFound, gin.H{"message": "Нет предыдущих записей"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Собираем полное имя
+	fullName := ""
+	if lastName.Valid && firstName.Valid && lastName.String != "" && firstName.String != "" {
+		fullName = lastName.String + " " + firstName.String
+		if patronymic.Valid && patronymic.String != "" {
+			fullName += " " + patronymic.String
+		}
+	} else if lastName.Valid && lastName.String != "" {
+		fullName = lastName.String
+	} else if firstName.Valid && firstName.String != "" {
+		fullName = firstName.String
+	}
+
+	task.FullName = fullName
+
+	if department.Valid {
+		task.Department = department.String
+	}
+
+	c.JSON(http.StatusOK, task)
+}

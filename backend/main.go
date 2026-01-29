@@ -84,6 +84,7 @@ func main() {
 		api.PUT("/tasks/:id", taskHandler.UpdateTask)
 		api.DELETE("/tasks/:id", taskHandler.DeleteTask)
 		api.POST("/tasks/:id/duplicate", taskHandler.DuplicateTask)
+		api.GET("/tasks/project/:projectId/last", taskHandler.GetLastTaskByProjectAndUser)
 
 		// Проекты
 		api.GET("/projects", projectHandler.GetProjects)

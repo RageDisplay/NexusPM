@@ -20,6 +20,9 @@ const TaskManager = () => {
     });
     const [loading, setLoading] = useState(false);
     const [editingTask, setEditingTask] = useState(null);
+    const [lastTask, setLastTask] = useState(null);
+    const [loadingLastTask, setLoadingLastTask] = useState(false);
+    const [lastTaskVisible, setLastTaskVisible] = useState(false);
     const { user } = useAuth();
 
     // Фильтрация и поиск
@@ -159,6 +162,30 @@ const TaskManager = () => {
             title: selectedProject?.name || '',
             description: selectedProject?.description || ''
         });
+
+        // Загружаем последнюю задачу для этого проекта
+        if (projectId) {
+            fetchLastTask(projectId);
+        } else {
+            setLastTaskVisible(false);
+            setLastTask(null);
+        }
+    };
+
+    const fetchLastTask = async (projectId) => {
+        try {
+            setLoadingLastTask(true);
+            const response = await api.get(`/api/tasks/project/${projectId}/last`);
+            setLastTask(response.data);
+            // Показываем блок с небольшой задержкой чтобы сработала анимация
+            setTimeout(() => setLastTaskVisible(true), 20);
+        } catch (error) {
+            // Нет предыдущих задач - это нормально
+            setLastTaskVisible(false);
+            setLastTask(null);
+        } finally {
+            setLoadingLastTask(false);
+        }
     };
 
     const createTask = async (e) => {
@@ -168,8 +195,13 @@ const TaskManager = () => {
             const response = await api.post('/api/tasks', newTask);
             
             setTasks(prevTasks => [response.data, ...prevTasks]);
-            
+
             await fetchTasks();
+
+            // Плавно скрываем блок с последней записью по проекту после создания отчёта
+            setLastTaskVisible(false);
+            // Устанавливаем null после завершения анимации
+            setTimeout(() => setLastTask(null), 350);
 
             setNewTask({
                 title: '',
@@ -361,6 +393,53 @@ const TaskManager = () => {
                     <strong>Описание задачи:</strong>
                     <p>{newTask.description || 'Выберите проект для отображения описания'}</p>
                 </div>
+
+                {lastTask && (
+                        <div className={`last-task-info-box ${lastTaskVisible ? '' : 'hidden'}`}>
+                        <strong>Ваша последняя запись по этому проекту:</strong>
+                        <div className="last-task-details">
+                            <div className="last-task-row">
+                                <span className="label">Прогресс:</span>
+                                <span className="value">{lastTask.progress}%</span>
+                            </div>
+                            <div className="last-task-row">
+                                <span className="label">Часов потрачено:</span>
+                                <span className="value">{lastTask.hours_per_week} ч</span>
+                            </div>
+                            <div className="last-task-row">
+                                <span className="label">Загрузка на месяц:</span>
+                                <span className="value">{lastTask.load_per_month}%</span>
+                            </div>
+                            {lastTask.weekly_info && (
+                                <div className="last-task-section">
+                                    <span className="label">За неделю:</span>
+                                    <p className="info-text">{lastTask.weekly_info}</p>
+                                </div>
+                            )}
+                            {lastTask.planning && (
+                                <div className="last-task-section">
+                                    <span className="label">Планируется:</span>
+                                    <p className="info-text">{lastTask.planning}</p>
+                                </div>
+                            )}
+                            {lastTask.help_needed && (
+                                <div className="last-task-section">
+                                    <span className="label">Требуется помощь:</span>
+                                    <p className="info-text">{lastTask.help_needed}</p>
+                                </div>
+                            )}
+                            <div className="last-task-date">
+                                Обновлено: {new Date(lastTask.updated_at).toLocaleDateString('ru-RU')}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {loadingLastTask && (
+                    <div className="last-task-info-box loading">
+                        <span>⏳ Загрузка предыдущей информации...</span>
+                    </div>
+                )}
 
                 <div className="form-group form-col-1">
                     <label>Информация за неделю</label>
