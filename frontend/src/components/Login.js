@@ -155,15 +155,15 @@ const Login = () => {
     try {
       const endpoint = isLogin ? '/api/login' : '/api/register';
       const payload = { 
-        username: formData.username,
-        password: formData.password,
+        username: formData.username.trim(),
+        password: formData.password.trim(),
       };
       
       // Добавляем поля регистрации
       if (!isLogin) {
         payload.first_name = formData.firstName.trim();
         payload.last_name = formData.lastName.trim();
-        payload.patronymic = formData.patronymic.trim();
+        payload.patronymic = formData.patronymic ? formData.patronymic.trim() : '';
         payload.department = formData.department;
       }
       

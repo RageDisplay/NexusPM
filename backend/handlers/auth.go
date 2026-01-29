@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"task-management-backend/database"
 	"task-management-backend/ldap"
 	"task-management-backend/models"
@@ -32,12 +33,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.Printf("Register error - JSON bind failed: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат данных регистрации"})
 		return
 	}
 
-	log.Printf("Register attempt: username=%s, department=%s, firstName=%s, lastName=%s",
-		req.Username, req.Department, req.FirstName, req.LastName)
+	// Очищаем отчество от лишних пробелов
+	req.Patronymic = strings.TrimSpace(req.Patronymic)
+
+	log.Printf("Register attempt: username=%s, department=%s, firstName=%s, lastName=%s, patronymic=%s",
+		req.Username, req.Department, req.FirstName, req.LastName, req.Patronymic)
 
 	// Проверка существования пользователя
 	var exists bool
@@ -59,7 +63,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	hashedPassword, err := database.HashPassword(req.Password)
 	if err != nil {
 		log.Printf("Register error: failed to hash password for user %s: %v", req.Username, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка формата пароля"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при обработке пароля"})
 		return
 	}
 
@@ -70,7 +74,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	)
 	if err != nil {
 		log.Printf("Register error: failed to insert user %s: %v", req.Username, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// Не отправляем техническую ошибку БД клиенту
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании пользователя. Проверьте введенные данные"})
 		return
 	}
 
