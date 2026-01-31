@@ -401,6 +401,70 @@ func (h *ProjectHandler) GetProjectUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
+// GetUserProjectsWithStats получить проекты пользователя со статистикой (дата последнего отчета и статус)
+func (h *ProjectHandler) GetUserProjectsWithStats(c *gin.Context) {
+	userID := c.GetInt("userID")
+
+	// Логируем для отладки
+	println("[DEBUG] GetUserProjectsWithStats called for userID:", userID)
+
+	// Получаем все проекты пользователя (его собственные + назначенные)
+	rows, err := h.db.Query(`
+        SELECT DISTINCT p.id, p.name, p.description, p.created_by, p.department, p.created_at, p.updated_at
+        FROM projects p
+        LEFT JOIN user_projects up ON p.id = up.project_id
+        WHERE up.user_id = ? OR p.created_by = ?
+        ORDER BY p.name
+    `, userID, userID)
+	if err != nil {
+		println("[ERROR] Failed to query projects:", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	type ProjectWithStats struct {
+		models.Project
+		LastReportDate *string `json:"last_report_date"`
+	}
+
+	projects := []ProjectWithStats{}
+	for rows.Next() {
+		var project ProjectWithStats
+		err := rows.Scan(&project.ID, &project.Name, &project.Description, &project.CreatedBy,
+			&project.Department, &project.CreatedAt, &project.UpdatedAt)
+		if err != nil {
+			println("[ERROR] Failed to scan project:", err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Получаем дату последнего отчета для этого проекта (только для текущего пользователя)
+		var lastReportDate sql.NullTime
+		err = h.db.QueryRow(`
+            SELECT MAX(created_at) FROM tasks WHERE project_id = ? AND user_id = ?
+        `, project.ID, userID).Scan(&lastReportDate)
+
+		if err != nil && err != sql.ErrNoRows {
+			println("[ERROR] Failed to get last report date for project", project.ID, ":", err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if lastReportDate.Valid {
+			dateStr := lastReportDate.Time.Format("2006-01-02T15:04:05Z07:00")
+			project.LastReportDate = &dateStr
+			println("[DEBUG] Project", project.ID, "has last_report_date:", dateStr)
+		} else {
+			println("[DEBUG] Project", project.ID, "has no reports")
+		}
+		projects = append(projects, project)
+	}
+
+	println("[DEBUG] Returning", len(projects), "projects")
+	c.JSON(http.StatusOK, projects)
+}
+
 // DeleteProject удалить проект (для админа и менеджера, создавшего проект)
 func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	userRole := c.GetString("userRole")

@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import ProjectSelector from './ProjectSelector';
+import BatchReportMode from './BatchReportMode';
 
 const TaskManager = () => {
     const [tasks, setTasks] = useState([]);
     const [projects, setProjects] = useState([]);
     const [departmentUsers, setDepartmentUsers] = useState([]);
+    const [batchMode, setBatchMode] = useState(false); // Toggle для batch mode
+    const [projectsRefresh, setProjectsRefresh] = useState(0); // Триггер для обновления ProjectSelector
     const [newTask, setNewTask] = useState({
         title: '',
         description: '',
@@ -152,20 +156,17 @@ const TaskManager = () => {
         return filtered;
     };
 
-    const handleProjectSelect = (e) => {
-        const projectId = parseInt(e.target.value);
-        const selectedProject = projects.find(p => p.id === projectId);
-        
+    const handleProjectSelect = (project) => {
         setNewTask({
             ...newTask,
-            project_id: projectId,
-            title: selectedProject?.name || '',
-            description: selectedProject?.description || ''
+            project_id: project.id,
+            title: project.name || '',
+            description: project.description || ''
         });
 
         // Загружаем последнюю задачу для этого проекта
-        if (projectId) {
-            fetchLastTask(projectId);
+        if (project.id) {
+            fetchLastTask(project.id);
         } else {
             setLastTaskVisible(false);
             setLastTask(null);
@@ -197,6 +198,10 @@ const TaskManager = () => {
             setTasks(prevTasks => [response.data, ...prevTasks]);
 
             await fetchTasks();
+            // Обновляем статусы проектов после создания отчета
+            await fetchProjects();
+            // Форсируем обновление ProjectSelector
+            setProjectsRefresh(prev => prev + 1);
 
             // Плавно скрываем блок с последней записью по проекту после создания отчёта
             setLastTaskVisible(false);
@@ -349,27 +354,30 @@ const TaskManager = () => {
 
     return (
         <div className="task-manager">
-            <h2>Управление задачами</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2 style={{ margin: 0 }}>Управление задачами</h2>
+                <button 
+                    onClick={() => setBatchMode(!batchMode)}
+                    className={`btn ${batchMode ? 'btn-secondary' : 'btn-primary'}`}
+                    style={{ whiteSpace: 'nowrap' }}
+                >
+                    {batchMode ? '← Вернуться к обычному режиму' : '→ Пакетное заполнение'}
+                </button>
+            </div>
             
+            {batchMode ? (
+                <BatchReportMode />
+            ) : (
+                <>
             <form onSubmit={createTask} className="task-form">
                 <h3>Заполнить отчёт</h3>
                 
-                <div className="form-group form-col-1">
-                    <label>Проект (Название)</label>
-                    <select
-                        value={newTask.project_id || ''}
-                        onChange={handleProjectSelect}
-                        required
-                        disabled={loading}
-                    >
-                        <option value="">-- Выберите проект --</option>
-                        {projects.map(project => (
-                            <option key={project.id} value={project.id}>
-                                {project.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                <ProjectSelector 
+                    onProjectSelect={handleProjectSelect}
+                    selectedProjectId={newTask.project_id}
+                    disabled={loading}
+                    forceRefresh={projectsRefresh}
+                />
 
                 {user?.role === 'manager' && (
                     <div className="form-group form-col-2">
@@ -797,6 +805,8 @@ const TaskManager = () => {
                     </div>
                 )}
             </div>
+        </>
+            )}
         </div>
     );
 };

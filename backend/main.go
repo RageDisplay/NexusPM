@@ -89,6 +89,7 @@ func main() {
 		// Проекты
 		api.GET("/projects", projectHandler.GetProjects)
 		api.GET("/projects/user", projectHandler.GetUserProjects)
+		api.GET("/projects/user/stats", projectHandler.GetUserProjectsWithStats)
 		api.GET("/projects/:id", projectHandler.GetProjectByID)
 		api.POST("/projects", middleware.ManagerOrAdmin(), projectHandler.CreateProject)
 		api.PUT("/projects/:id", middleware.ManagerOrAdmin(), projectHandler.UpdateProject)
