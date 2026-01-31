@@ -26,6 +26,7 @@ const BatchReportMode = () => {
     const [message, setMessage] = useState(null);
     const [lastTaskData, setLastTaskData] = useState(null); // Информация о последнем отчёте текущего проекта
     const [loadingLastTask, setLoadingLastTask] = useState(false);
+    const [editingReportIndex, setEditingReportIndex] = useState(null); // Индекс редактируемого отчёта
 
     useEffect(() => {
         fetchProjects();
@@ -214,8 +215,32 @@ const BatchReportMode = () => {
         return projects.find(p => p.id === selectedIds[currentProjectIndex]);
     };
 
+    const getProjectData = () => {
+        // При редактировании используем project_id из currentForm
+        if (editingReportIndex !== null && currentForm.project_id) {
+            return projects.find(p => p.id === currentForm.project_id);
+        }
+        // При нормальном заполнении используем getCurrentProject
+        return getCurrentProject();
+    };
+
     const saveCurrentReport = () => {
         const reportToSave = { ...currentForm };
+        
+        // Если редактируем существующий отчёт - заменяем его
+        if (editingReportIndex !== null) {
+            const newReports = [...reports];
+            newReports[editingReportIndex] = reportToSave;
+            setReports(newReports);
+            setEditingReportIndex(null);
+            setMode('review');
+            setLastTaskData(null);
+            setMessage({ type: 'success', text: 'Отчет обновлен.' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+        
+        // Если добавляем новый отчёт
         const newReports = [...reports, reportToSave];
         setReports(newReports);
 
@@ -291,9 +316,14 @@ const BatchReportMode = () => {
     };
 
     const editReport = (index) => {
-        setCurrentForm(reports[index]);
-        setCurrentProjectIndex(index);
+        const reportToEdit = reports[index];
+        setCurrentForm(reportToEdit);
+        setEditingReportIndex(index);
         setMode('fill');
+        // Загружаем последний отчёт для проекта этого отчёта
+        if (reportToEdit.project_id) {
+            fetchLastTask(reportToEdit.project_id);
+        }
     };
 
     const deleteReport = (index) => {
@@ -402,14 +432,40 @@ const BatchReportMode = () => {
                 <div className="batch-fill-section">
                     <div className="fill-header">
                         <h3>Проект {currentProjectIndex + 1} из {selectedProjectIds.size}</h3>
-                        <span className="project-name">{getCurrentProject()?.name}</span>
-                        <div className="progress-bar">
-                            <div
-                                className="progress-fill"
-                                style={{ width: `${((currentProjectIndex + 1) / selectedProjectIds.size) * 100}%` }}
-                            ></div>
-                        </div>
+                        <span className="project-name">{getProjectData()?.name}</span>
                     </div>
+
+                    {/* Описание проекта */}
+                    {getProjectData()?.description && (
+                        <div style={{
+                            background: 'rgba(255, 159, 67, 0.05)',
+                            border: '1px solid rgba(255, 159, 67, 0.2)',
+                            borderRadius: '8px',
+                            padding: '15px',
+                            marginBottom: '15px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center'
+                        }}>
+                            <strong style={{
+                                display: 'block',
+                                color: 'var(--primary)',
+                                marginBottom: '8px',
+                                fontSize: '0.95rem',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                fontWeight: '700'
+                            }}>Описание проекта:</strong>
+                            <p style={{
+                                color: 'var(--text-primary)',
+                                margin: '0',
+                                lineHeight: '1.6',
+                                fontSize: '0.95rem',
+                                wordWrap: 'break-word',
+                                overflowWrap: 'break-word'
+                            }}>{getProjectData()?.description}</p>
+                        </div>
+                    )}
 
                     {/* Информация о последнем отчете */}
                     {lastTaskData && (
@@ -644,17 +700,11 @@ const BatchReportMode = () => {
                             ✓ Отправить все отчеты ({reports.length})
                         </button>
                         <button
-                            className="btn btn-secondary"
-                            onClick={() => setMode('select')}
-                            disabled={loading}
-                        >
-                            + Добавить еще
-                        </button>
-                        <button
                             className="btn btn-danger"
                             onClick={() => {
                                 setMode('select');
                                 setReports([]);
+                                setEditingReportIndex(null);
                             }}
                             disabled={loading}
                         >
