@@ -5,6 +5,7 @@ import DepartmentStatistics from './DepartmentStatistics';
 import ActivityHistory from './ActivityHistory';
 import Notifications from './Notifications';
 import UserProfile from './UserProfile';
+import MyProjects from './MyProjects';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -122,6 +123,12 @@ const Dashboard = () => {
           Обзор
         </button>
         <button 
+          className={`tab-button ${activeTab === 'projects' ? 'active' : ''}`}
+          onClick={() => setActiveTab('projects')}
+        >
+          Мои проекты
+        </button>
+        <button 
           className={`tab-button ${activeTab === 'profile' ? 'active' : ''}`}
           onClick={() => setActiveTab('profile')}
         >
@@ -225,6 +232,10 @@ const Dashboard = () => {
             <Notifications />
           </div>
         </>
+      )}
+
+      {activeTab === 'projects' && (
+        <MyProjects />
       )}
 
       {activeTab === 'profile' && (

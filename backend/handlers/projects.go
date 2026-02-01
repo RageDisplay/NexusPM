@@ -18,6 +18,34 @@ func NewProjectHandler(db *sql.DB) *ProjectHandler {
 	return &ProjectHandler{db: db}
 }
 
+// GetAllProjects получить все доступные проекты (для всех пользователей)
+func (h *ProjectHandler) GetAllProjects(c *gin.Context) {
+	rows, err := h.db.Query(`
+        SELECT id, name, description, created_by, department, created_at, updated_at
+        FROM projects
+        ORDER BY name
+    `)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	projects := []models.Project{}
+	for rows.Next() {
+		var project models.Project
+		err := rows.Scan(&project.ID, &project.Name, &project.Description, &project.CreatedBy, &project.Department, &project.CreatedAt, &project.UpdatedAt)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		projects = append(projects, project)
+	}
+
+	c.JSON(http.StatusOK, projects)
+}
+
 // GetProjects получить все проекты (менеджеры видят ВСЕ проекты и могут назначать сотрудников)
 func (h *ProjectHandler) GetProjects(c *gin.Context) {
 	userRole := c.GetString("userRole")
@@ -54,17 +82,17 @@ func (h *ProjectHandler) GetProjects(c *gin.Context) {
 	c.JSON(http.StatusOK, projects)
 }
 
-// GetUserProjects получить проекты текущего пользователя (созданные им или назначенные)
+// GetUserProjects получить проекты текущего пользователя (только явно назначенные через user_projects)
 func (h *ProjectHandler) GetUserProjects(c *gin.Context) {
 	userID := c.GetInt("userID")
 
 	rows, err := h.db.Query(`
         SELECT DISTINCT p.id, p.name, p.description, p.created_by, p.department, p.created_at, p.updated_at
         FROM projects p
-        LEFT JOIN user_projects up ON p.id = up.project_id
-        WHERE up.user_id = ? OR p.created_by = ?
+        INNER JOIN user_projects up ON p.id = up.project_id
+        WHERE up.user_id = ?
         ORDER BY p.name
-    `, userID, userID)
+    `, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -514,4 +542,74 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Проект успешно удалён"})
+}
+
+// AssignProjectToSelf пользователь добавляет проект себе (для всех пользователей)
+func (h *ProjectHandler) AssignProjectToSelf(c *gin.Context) {
+	userID := c.GetInt("userID")
+
+	var req struct {
+		ProjectID int `json:"project_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Проверяем, что проект существует
+	var projectName string
+	err := h.db.QueryRow("SELECT name FROM projects WHERE id = ?", req.ProjectID).Scan(&projectName)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Проект не найден"})
+		return
+	}
+
+	// Добавляем пользователя на проект
+	_, err = h.db.Exec(`
+        INSERT OR IGNORE INTO user_projects (user_id, project_id)
+        VALUES (?, ?)
+    `, userID, req.ProjectID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Проект успешно добавлен"})
+}
+
+// RemoveProjectFromSelf пользователь удаляет проект у себя (для всех пользователей)
+func (h *ProjectHandler) RemoveProjectFromSelf(c *gin.Context) {
+	userID := c.GetInt("userID")
+
+	var req struct {
+		ProjectID int `json:"project_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Проверяем, что проект существует
+	var projectName string
+	err := h.db.QueryRow("SELECT name FROM projects WHERE id = ?", req.ProjectID).Scan(&projectName)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Проект не найден"})
+		return
+	}
+
+	// Удаляем пользователя с проекта
+	_, err = h.db.Exec(`
+        DELETE FROM user_projects 
+        WHERE user_id = ? AND project_id = ?
+    `, userID, req.ProjectID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Проект успешно удален"})
 }
