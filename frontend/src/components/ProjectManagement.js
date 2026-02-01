@@ -11,6 +11,7 @@ const ProjectManagement = () => {
     });
     const [selectedProject, setSelectedProject] = useState(null);
     const [selectedUserId, setSelectedUserId] = useState('');
+    const [selectedUserIds, setSelectedUserIds] = useState(new Set());
     const [projectUsers, setProjectUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const { user } = useAuth();
@@ -121,6 +122,66 @@ const ProjectManagement = () => {
             alert('Ошибка: ' + (error.response?.data?.error || error.message));
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleAssignMultipleUsers = async (projectId) => {
+        if (selectedUserIds.size === 0) {
+            alert('Выберите хотя бы одного сотрудника');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const userIdArray = Array.from(selectedUserIds);
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const userId of userIdArray) {
+                try {
+                    await api.post('/api/projects/assign', {
+                        user_id: userId,
+                        project_id: projectId
+                    });
+                    successCount++;
+                } catch (error) {
+                    console.error(`Error assigning user ${userId}:`, error);
+                    errorCount++;
+                }
+            }
+
+            await fetchProjectUsers(projectId);
+            setSelectedUserIds(new Set());
+
+            let message = `✓ Добавлено сотрудников: ${successCount}`;
+            if (errorCount > 0) {
+                message += `\n⚠ Ошибок: ${errorCount}`;
+            }
+            alert(message);
+        } catch (error) {
+            console.error('Error in batch assignment:', error);
+            alert('Ошибка при массовом добавлении: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const toggleUserSelection = (userId) => {
+        const newSelected = new Set(selectedUserIds);
+        if (newSelected.has(userId)) {
+            newSelected.delete(userId);
+        } else {
+            newSelected.add(userId);
+        }
+        setSelectedUserIds(newSelected);
+    };
+
+    const toggleSelectAll = () => {
+        const availableUsers = users.filter(u => !projectUsers.some(pu => pu.id === u.id));
+        if (selectedUserIds.size === availableUsers.length) {
+            setSelectedUserIds(new Set());
+        } else {
+            setSelectedUserIds(new Set(availableUsers.map(u => u.id)));
         }
     };
 
@@ -281,38 +342,85 @@ const ProjectManagement = () => {
 
                                 {/* Assign User to Project */}
                                 <div className="assign-users-section">
-                                    <h5>Добавить сотрудника</h5>
-                                    <form className="assign-users-form" onSubmit={(e) => {
-                                        e.preventDefault();
-                                        handleAssignUserToProject(selectedUserId, selectedProject.id);
-                                    }}>
-                                        <select
-                                            value={selectedUserId}
-                                            onChange={(e) => setSelectedUserId(parseInt(e.target.value) || '')}
-                                        >
-                                            <option value="">-- Выберите сотрудника --</option>
-                                            {/* Для менеджера и админа добавляем их самих в список, если они еще не добавлены */}
-                                            {(user?.role === 'manager' || user?.role === 'admin') && !projectUsers.some(pu => pu.id === user.id) && (
-                                                <option value={user.id}>
-                                                    {user.username} ({user.department}) - Я
-                                                </option>
+                                    <h5>Добавить сотрудников</h5>
+
+                                    {/* Batch assignment mode */}
+                                    <div className="batch-assign-container" style={{ border: '1px solid #ddd', borderRadius: '4px', padding: '15px' }}>
+                                        <div className="users-checkbox-list" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                            {users.filter(u => !projectUsers.some(pu => pu.id === u.id)).length === 0 ? (
+                                                <div className="loading-message">Все доступные сотрудники уже добавлены на проект</div>
+                                            ) : (
+                                                <>
+                                                    <div className="checkbox-item" style={{ 
+                                                        padding: '10px', 
+                                                        backgroundColor: 'rgba(255, 159, 67, 0.15)',
+                                                        borderRadius: '4px',
+                                                        marginBottom: '10px',
+                                                        border: '1px solid rgba(255, 159, 67, 0.3)'
+                                                    }}>
+                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={selectedUserIds.size > 0 && selectedUserIds.size === users.filter(u => !projectUsers.some(pu => pu.id === u.id)).length}
+                                                                onChange={toggleSelectAll}
+                                                                disabled={loading}
+                                                            />
+                                                            <strong>Выбрать всех ({users.filter(u => !projectUsers.some(pu => pu.id === u.id)).length})</strong>
+                                                        </label>
+                                                    </div>
+
+                                                    <div style={{ borderTop: '1px solid #ddd', paddingTop: '10px' }}>
+                                                        {users
+                                                            .filter(u => !projectUsers.some(pu => pu.id === u.id))
+                                                            .map(u => (
+                                                                <label 
+                                                                    key={u.id}
+                                                                    className="checkbox-item" 
+                                                                    style={{ 
+                                                                        display: 'flex', 
+                                                                        alignItems: 'center',
+                                                                        gap: '10px',
+                                                                        padding: '8px',
+                                                                        cursor: 'pointer',
+                                                                        borderRadius: '4px',
+                                                                        backgroundColor: selectedUserIds.has(u.id) ? '#ff9d0045' : 'transparent',
+                                                                        marginBottom: '5px'
+                                                                    }}
+                                                                >
+                                                                    <input 
+                                                                        type="checkbox"
+                                                                        checked={selectedUserIds.has(u.id)}
+                                                                        onChange={() => toggleUserSelection(u.id)}
+                                                                        disabled={loading}
+                                                                    />
+                                                                    <span>{u.username}</span>
+                                                                    <span style={{ color: '#999', fontSize: '0.9em' }}>({u.department})</span>
+                                                                </label>
+                                                            ))}
+                                                    </div>
+                                                </>
                                             )}
-                                            {users
-                                                .filter(u => !projectUsers.some(pu => pu.id === u.id) && u.id !== user.id)
-                                                .map(u => (
-                                                    <option key={u.id} value={u.id}>
-                                                        {u.username} ({u.department})
-                                                    </option>
-                                                ))}
-                                        </select>
-                                        <button
-                                            type="submit"
-                                            className="btn-assign"
-                                            disabled={!selectedUserId || loading}
-                                        >
-                                            {loading ? 'Добавление...' : 'Добавить'}
-                                        </button>
-                                    </form>
+                                        </div>
+
+                                        <div style={{ marginTop: '15px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                            <button
+                                                className="btn btn-primary"
+                                                onClick={() => handleAssignMultipleUsers(selectedProject.id)}
+                                                disabled={selectedUserIds.size === 0 || loading}
+                                                style={{ flex: 1 }}
+                                            >
+                                                {loading ? 'Добавление...' : `✓ Добавить выбранных (${selectedUserIds.size})`}
+                                            </button>
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={() => setSelectedUserIds(new Set())}
+                                                disabled={loading}
+                                                style={{ flex: 1 }}
+                                            >
+                                                ✕ Очистить выбор
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </>

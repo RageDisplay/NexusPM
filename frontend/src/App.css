@@ -1960,6 +1960,81 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Batch assignment styles */
+.batch-assign-container {
+  background: rgba(255, 159, 67, 0.05);
+  border: 1px solid rgba(255, 159, 67, 0.2);
+}
+
+.users-checkbox-list {
+  background: var(--card-bg);
+  border-radius: 4px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+}
+
+.checkbox-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.checkbox-item label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  flex: 1;
+  user-select: none;
+}
+
+.tab-button {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-weight: 500;
+}
+
+.tab-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(255, 159, 67, 0.2);
+}
+
+.tab-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #7f8c8d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.3s;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #5d6d7b;
+}
+
+.btn-secondary:disabled {
+  background-color: #7f8c8d;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .project-description-box {
   background: rgba(255, 159, 67, 0.05);
   border: 1px solid rgba(255, 159, 67, 0.2);
