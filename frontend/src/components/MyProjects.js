@@ -146,7 +146,7 @@ const MyProjects = () => {
             <div className="projects-search-container">
                 <input
                     type="text"
-                    placeholder="🔍 Поиск по названию, описанию или отделу..."
+                    placeholder="Поиск по названию, описанию или отделу..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="projects-search-input"
@@ -173,7 +173,7 @@ const MyProjects = () => {
                 {/* Мои проекты */}
                 <div className="projects-column">
                     <div className="column-header">
-                        <h3>📌 Мои проекты ({filteredMyProjects.length})</h3>
+                        <h3>Мои проекты ({filteredMyProjects.length})</h3>
                     </div>
                     <div
                         className="projects-list drag-zone"
@@ -206,7 +206,7 @@ const MyProjects = () => {
                                 >
                                     <div className="project-card-title">{project.name}</div>
                                     <div className="project-card-desc">{project.description}</div>
-                                    <div className="project-card-dept">📂 {project.department}</div>
+                                    <div className="project-card-dept">{project.department}</div>
                                     <div className="project-card-hint">Перетащить вправо для удаления ←</div>
                                 </div>
                             ))
@@ -217,7 +217,7 @@ const MyProjects = () => {
                 {/* Доступные проекты */}
                 <div className="projects-column">
                     <div className="column-header">
-                        <h3>📂 Доступные проекты ({filteredAvailableProjects.length})</h3>
+                        <h3>Доступные проекты ({filteredAvailableProjects.length})</h3>
                     </div>
                     <div
                         className="projects-list drag-zone"
@@ -250,7 +250,7 @@ const MyProjects = () => {
                                 >
                                     <div className="project-card-title">{project.name}</div>
                                     <div className="project-card-desc">{project.description}</div>
-                                    <div className="project-card-dept">📂 {project.department}</div>
+                                    <div className="project-card-dept">{project.department}</div>
                                     <div className="project-card-hint">Перетащить влево для добавления →</div>
                                 </div>
                             ))

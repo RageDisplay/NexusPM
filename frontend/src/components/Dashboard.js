@@ -122,12 +122,14 @@ const Dashboard = () => {
         >
           Обзор
         </button>
-        <button 
-          className={`tab-button ${activeTab === 'projects' ? 'active' : ''}`}
-          onClick={() => setActiveTab('projects')}
-        >
-          Мои проекты
-        </button>
+        {(user?.role === 'manager' || user?.role === 'admin') && (
+          <button 
+            className={`tab-button ${activeTab === 'projects' ? 'active' : ''}`}
+            onClick={() => setActiveTab('projects')}
+          >
+            Мои проекты
+          </button>
+        )}
         <button 
           className={`tab-button ${activeTab === 'profile' ? 'active' : ''}`}
           onClick={() => setActiveTab('profile')}
@@ -140,12 +142,14 @@ const Dashboard = () => {
         >
           Активность
         </button>
-        <button 
-          className={`tab-button ${activeTab === 'statistics' ? 'active' : ''}`}
-          onClick={() => setActiveTab('statistics')}
-        >
-          Статистика
-        </button>
+        {(user?.role === 'manager' || user?.role === 'admin') && (
+          <button 
+            className={`tab-button ${activeTab === 'statistics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('statistics')}
+          >
+            Статистика
+          </button>
+        )}
       </div>
 
       {activeTab === 'overview' && (
